@@ -168,6 +168,9 @@ data.zju.thermo.halfHourly <-
     hour = unique(hour),
     halfHour = unique(halfHour)
   ), by =label]
+ggplot(data.zju.thermo.halfHourly[month == ""], aes(x = factor(hour), y = temp))  +
+  ylim(5, 35) + geom_boxplot() + geom_point(size = 3.5, position = "jitter", aes(color =
+                                                                                   room_code))
 
 #大概...原始数据就差不多了？
 #return 0  ##just for fun
