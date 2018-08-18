@@ -48,7 +48,7 @@ data.all$hour <- format(data.all$time, "%H")
 data.all$date <-
   paste(data.all$year, data.all$month, data.all$day, sep = "-")
 #data.all <- data.all[year %in% c("2016", "2017")]#仅处理2016与2017年的数据
-data.all$label <- paste(data.all$ac_code, data.all$date, sep = "-")
+data.all$label <- paste(data.all$ac_code, data.all$date, sep = "-")#label=空调编码-年-月-日
 
 #开关机情况处理
 #?????????为什么不可以直接用循环设置data.all的on_off值
@@ -72,16 +72,16 @@ rm(data.all)
 
 new.data.all1 <-
   new.data.all0[, .(
-    ac_code = unique(ac_code),
+    ac_code = ac_code[1],
     time = time[1],
-    date = unique(date),
+    date = date[1],
     on_off = sum(on_off),
     total_elec = sum(total_elec),
-    year = unique(year),
-    month = unique(month),
-    day = unique(day),
+    year = year[1],
+    month = month[1],
+    day = day[1],
     label = unique(label),
-    hour = unique(hour)
+    hour = hour[1]
   ), by = label1]
 #将半个小时的数据化为一个小时的数据
 
@@ -108,6 +108,9 @@ setorder(newdata, label, hour)
 newdata <- newdata[!duplicated(newdata)]
 rm(newdata.all1)
 
+#筛选除去长度不为15（即8:00-22:00不完整的数据）
+data.labelSelect<-newdata[,.(num=length(on_off)),by=label]
+newdata<-newdata[label%in%data.labelSelect[num==15]$label]
 
 raw.rawData <- newdata[, .(
   runtime = sum(on_off),
@@ -129,6 +132,7 @@ raw.rawData <- newdata[, .(
   h14 = on_off[14],
   h15 = on_off[15]
 ), by = label]
+
 
 raw.noneOn <- raw.rawData[runtime == 0]
 raw.fullOn <- raw.rawData[runtime == 15]
@@ -171,7 +175,7 @@ pamkClusterEvaluate(data = raw.periodOn[, 5:19],
 
 
 #实际聚类操作，k-medoids
-kSize <- 8
+kSize <- 7
 pamk.best <-
   pamk(
     raw.periodOn[, 5:19],
@@ -184,8 +188,11 @@ pamk.best <-
 
 raw.periodOn$cluster <- pamk.best$pamobject$clustering#将聚类的值赋给原始数据
 raw.periodOn$date <- as.Date(raw.periodOn$date)
-
 raw.fullOn$cluster <- 4#全开作为第四类
+
+#工作日及非工作日的标签区分
+library(timeDate)
+raw.periodOn$isWorkday<-isWeekday(timeDate(raw.periodOn$date))
 
 ## 逐时开机概率进行处理，并输出到文件及绘图
 nn <- data.table()
@@ -212,9 +219,12 @@ for (i in 1:kSize) {
       )
     )
 }
+#计算每一种开启模式的平均使用时长
+raw.meanRuntime<-raw.periodOn[,.(meanRuntime=mean(runtime)),by=cluster]
+setorder(raw.meanRuntime,cluster)
 write.csv(
    data.table(
-     nn,     cluster_count = pamk.best$pamobject$i.med,
+     nn,raw.meanRuntime, cluster_count = pamk.best$pamobject$i.med,
    pamk.best$pamobject$medoids,
      pamk.best$pamobject$clusinfo
    ),
@@ -277,7 +287,8 @@ rm(postProcessData.Winter)
 #}
 
 postProcessData$clusterSeasonLabel <-
-  paste(postProcessData$cluster, postProcessData$season, sep = "_")
+  paste(postProcessData$cluster, postProcessData$season,postProcessData$isWorkday, sep = "_")
+#clusterSeasonLabel：聚类_季节_是否为工作日
 
 ##聚类统计
 seasonSum <-
@@ -287,7 +298,8 @@ seasonSum <-
 clusterEvaluate <- postProcessData[, .(
   cluster = unique(cluster),
   season = unique(season),
-  count = length(season)
+  count = length(season),
+  isWorkday=unique(isWorkday)
 ), by = clusterSeasonLabel]
 
 
@@ -304,9 +316,9 @@ clusterMapping <- clusterEvaluate[, .(
   Autumn = ratio[season == "Autumn"],
   Winter_warm = ratio[season == "Winter_warm"],
   Winter = ratio[season == "Winter"]
-), by = cluster]
+), by = paste(cluster,isWorkday,sep = "_")]
 
-write.csv(cbind(clusterEvaluate,clusterMapping),hj x 
+write.csv(cbind(clusterEvaluate,clusterMapping),
           file = paste(kSize, "clusterEvaluate.csv", sep = "_"))
 
 
@@ -332,9 +344,9 @@ wssClusterEvaluate <- function(data,
 pamkClusterEvaluate <- function(data, startK = 2, endK = 10) {
   pamk.best <-
     pamk(data,
-         usepam = FALSE,
+         usepam = FALSE,critout = TRUE,
          krange = min(startK, endK):max(startK, endK))
-  return(pamk.best$nc)
+  return(pamk.best)
 }
 
 #Calinsky标准
