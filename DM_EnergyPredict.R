@@ -3,6 +3,7 @@ library(forecast)
 library(ggplot2)
 library(car)
 library(gvlma)
+library(pls)
 
 #加载天气数据
 load("杭州2016_2017气象数据.rdata")
@@ -11,9 +12,9 @@ load("2018-6-6.RData")#HZNU用电数据
 ######
 #利用已生成的能耗序列对能耗模型进行修正
 #实际能耗=f(时间序列能耗，室外温度，etc)
-
 data.regress.raw <- nn[on_ratio>0&total_elec>0& (month(time) == 5 | month(time) == 6),
                        c("build_code","time","temp_diff","on_ratio","set_temp","real_temp","w_temp","w_hum","time_sep","total_elec")]#夏季温和
+data.regress.raw$deltaEC<-data.regress.raw$total_elec - data.regress.raw$time_sep
 scatterplotMatrix(data.regress.raw[,3:10],smoother=list(lty=2),plot.points = FALSE,main="ScatterPlot without 0 EC Data")
 cor(data.regress.raw[, 3:10], use = "complete.obs")
 #相关矩阵如下(含零能耗记录)
@@ -37,10 +38,40 @@ abline(h = cutoff, lty = 2, col = "red")
 
 influencePlot(regressFit)
 
-regressFit<-lm(total_elec~time_sep+I((on_ratio)^0.5)+w_temp+I(w_temp^2)+I(exp(w_hum)^-1)+I((real_temp)^3)+I(real_temp^2)+I(set_temp),data=data.regress.raw)
+####原始未调整参数
+regressFit<-lm(total_elec~time_sep+
+                 on_ratio+
+                 w_temp+
+                 w_hum+
+                 real_temp+
+                 set_temp,data=data.regress.raw)#未调整_多元线性回归
+regressFit<-plsr(total_elec~time_sep+
+                   on_ratio+
+                   w_temp+
+                   w_hum+
+                   real_temp+
+                   set_temp,data=data.regress.raw,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
+
+regressFit<-lm(total_elec~time_sep+
+                 I((on_ratio)^0.5)+
+                 w_temp+I(w_temp^2)+I(w_temp^3)+
+                 I(exp(w_hum)^-1)+
+                 I((real_temp)^3)+I(real_temp^2)+
+                 I(set_temp^2),data=data.regress.raw)#多元线性回归
+
+regressFit<-plsr(total_elec~time_sep+
+                   on_ratio+
+                   w_temp+
+                   I(exp(w_hum)^-1)+
+                   I(real_temp^2)+
+                   set_temp,data=data.regress.raw,validation="LOO",jackknife=TRUE)
+
 #检验过程
-summary(regressFit)
-cat("he\nllo\n")
+summary(regressFit,what = "all")
+jack.test(regressFit)
+coef(regressFit)
+
+capture.output(summary(regressFit),file = "summary_lm.txt")
 confint(regressFit)
 par(mfrow=c(1,1))
 plot(regressFit)
