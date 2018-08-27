@@ -4,19 +4,27 @@ library(ggplot2)
 library(car)
 library(gvlma)
 library(pls)
+library(kernlab)
 
-#加载天气数据
+####加载天气数据####
 load("杭州2016_2017气象数据.rdata")
 load("2018-6-6.RData")#HZNU用电数据
 
-######
-#利用已生成的能耗序列对能耗模型进行修正
+####利用已生成的能耗序列对能耗模型进行修正####
 #实际能耗=f(时间序列能耗，室外温度，etc)
-data.regress.raw <- nn[on_ratio>0&total_elec>0& (month(time) == 5 | month(time) == 6),
-                       c("build_code","time","temp_diff","on_ratio","set_temp","real_temp","w_temp","w_hum","time_sep","total_elec")]#夏季温和
+data.regress.raw<-nn
 data.regress.raw$deltaEC<-data.regress.raw$total_elec - data.regress.raw$time_sep
-scatterplotMatrix(data.regress.raw[,3:10],smoother=list(lty=2),plot.points = FALSE,main="ScatterPlot without 0 EC Data")
-cor(data.regress.raw[, 3:10], use = "complete.obs")
+data.regress.raw$ecHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw)-1)]$total_elec
+data.regress.raw$ecDayBefore<-data.regress.raw[c(1:24,1:nrow(data.regress.raw))]$total_elec
+data.regress.raw$ecWeekBefore<-data.regress.raw[c(1:(24*7),1:nrow(data.regress.raw))]$total_elec
+
+#夏季温和
+data.regress.process <- data.regress.raw[on_ratio>0&total_elec>0& (month(time) == 5 | month(time) == 6),
+                       c("build_code","time","temp_diff","on_ratio","set_temp","real_temp","w_temp","w_hum","time_sep","ecHourBefore","ecDayBefore","ecWeekBefore","total_elec")]
+data.regress.process<-na.omit(data.regress.process)
+
+scatterplotMatrix(data.regress.process[,3:ncol(data.regress.process)],smoother=list(lty=2),plot.points = FALSE,main="ScatterPlot without 0 EC Data")
+cor(data.regress.process[, 3:ncol(data.regress.process)], use = "complete.obs")
 #相关矩阵如下(含零能耗记录)
 #             temp_diff    on_ratio    set_temp  real_temp      w_temp       w_hum   time_sep  total_elec
 # total_elec  0.44015383 -0.04585804 -0.03313324  0.4272608  0.53695398 -0.14108668  0.8383870  1.00000000
@@ -24,7 +32,46 @@ cor(data.regress.raw[, 3:10], use = "complete.obs")
 #             temp_diff   on_ratio   set_temp  real_temp     w_temp       w_hum    time_sep   total_elec
 # total_elec  0.002200785  0.7604641  0.1256533  0.1528087  0.6136918 -0.32046952  0.74128579  1.000000000
 
-#####
+####将数据分为训练集和预测集####
+set.seed(32767)
+sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*0.7))#三七开
+data.regress.traning<-data.regress.process[sub,]
+data.regress.test<-data.regress.process[-sub,]
+
+####原始未调整参数####
+regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
+                 on_ratio+
+                 w_temp+
+                 w_hum+
+                 real_temp+
+                 set_temp,data=data.regress.process)#未调整_多元线性回归
+regressFit<-plsr(total_elec~time_sep+ecHourBefore+#ecDayBefore+ecWeekBefore+
+                   on_ratio+
+                   w_temp+
+                   w_hum+
+                   real_temp+
+                   set_temp,data=data.regress.process,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
+
+regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
+                 I((on_ratio)^0.5)+
+                 w_temp+I(w_temp^2)+I(w_temp^3)+
+                 I(exp(w_hum)^-1)+
+                 I((real_temp)^3)+I(real_temp^2)+
+                 I(set_temp^2),data=data.regress.process)#多元线性回归
+
+regressFit<-plsr(total_elec~time_sep+ecHourBefore+
+                   on_ratio+
+                   w_temp+
+                   I(real_temp^2)+
+                   set_temp,data=data.regress.process,validation="LOO",jackknife=TRUE)
+####回归诊断####
+#检验过程
+summary(regressFit,what = "all")
+jack.test(regressFit)
+R2(regressFit)
+coef(regressFit)
+
+
 #预测模型前处理
 #考虑异常值
 vif(regressFit)
@@ -35,42 +82,7 @@ hat.plot(regressFit)
 cutoff <- 4/(nrow(data.regress.raw) - length(regressFit$coefficients) - 2)
 plot(regressFit, which = 4, cook.levels = cutoff)
 abline(h = cutoff, lty = 2, col = "red")
-
 influencePlot(regressFit)
-
-####原始未调整参数
-regressFit<-lm(total_elec~time_sep+
-                 on_ratio+
-                 w_temp+
-                 w_hum+
-                 real_temp+
-                 set_temp,data=data.regress.raw)#未调整_多元线性回归
-regressFit<-plsr(total_elec~time_sep+
-                   on_ratio+
-                   w_temp+
-                   w_hum+
-                   real_temp+
-                   set_temp,data=data.regress.raw,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
-
-regressFit<-lm(total_elec~time_sep+
-                 I((on_ratio)^0.5)+
-                 w_temp+I(w_temp^2)+I(w_temp^3)+
-                 I(exp(w_hum)^-1)+
-                 I((real_temp)^3)+I(real_temp^2)+
-                 I(set_temp^2),data=data.regress.raw)#多元线性回归
-
-regressFit<-plsr(total_elec~time_sep+
-                   on_ratio+
-                   w_temp+
-                   I(exp(w_hum)^-1)+
-                   I(real_temp^2)+
-                   set_temp,data=data.regress.raw,validation="LOO",jackknife=TRUE)
-
-#检验过程
-summary(regressFit,what = "all")
-jack.test(regressFit)
-coef(regressFit)
-
 capture.output(summary(regressFit),file = "summary_lm.txt")
 confint(regressFit)
 par(mfrow=c(1,1))
@@ -83,6 +95,24 @@ ncvTest(regressFit)
 spreadLevelPlot(regressFit,id = TRUE)##有异常
 summary(gvlma(regressFit))
 
+####SVM回归算法####
+x.training<-as.matrix(data.regress.traning[,c("on_ratio","set_temp","real_temp","w_temp","w_hum","time_sep")])
+y.training<-as.matrix(data.regress.traning[,"total_elec"])
+x.test<-as.matrix(data.regress.test[,c("on_ratio","set_temp","real_temp","w_temp","w_hum","time_sep")])
+y.test<-as.matrix(data.regress.test[,"total_elec"])
+regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
+traning.predict<-data.table(predict(regm,x.training))
+test.predict<-data.table(predict(regm,x.test))
+getRSquare(test.predict$V1,y.test)
+
+data.caculate<-data.table(look=traning.predict$V1,ref=y.training)
+data.caculate$SSE<-(data.caculate$look- data.caculate$ref) ^2
+data.caculate$SST<-(data.caculate$look- mean(data.caculate$ref,na.rm = TRUE)) ^2
+( 1- ( sum(data.caculate$SSE) / sum(data.caculate$SST) ) )
+
+#confusionMatrix(test.predict,y.test)
+
+####用于回归诊断的函数####
 hat.plot <- function(fit){
   p <- length(coefficients(fit))
   n <- length(fitted(fit))
@@ -101,4 +131,10 @@ residplot <- function(fit, nbreaks=10) {
         col="red", lwd=2, lty=2)
   legend("topright",
          legend = c( "Normal Curve", "Kernel Density Curve"),lty=1:2, col=c("blue","red"), cex=.7)
+}
+getRSquare<-function(look,ref){
+  data.caculate<-data.table(look=look,ref=ref)
+  data.caculate$SSE<-(data.caculate$look- data.caculate$ref)^2
+  data.caculate$SST<-(data.caculate$look- mean(data.caculate$ref,na.rm = TRUE))^2
+  return( 1- ( sum(data.caculate$SSE) / sum(data.caculate$SST) ) )
 }

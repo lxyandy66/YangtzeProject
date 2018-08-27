@@ -37,7 +37,7 @@ for(i in c(2:16)){
 tr_ctree<-ctree(cluster~isWorkday+h8+h9+h10+h11+h12
                 +h13+h14+h15+h16+h17+h18
                 +h19+h20+h21+h22,data=data.behavior.tree.raw)
-tr_ctree<-prune(tr_ctree,cp=0.0125)
+# tr_ctree<-prune(tr_ctree,cp=0.0125)
 plot(tr_ctree)
 
 ###以判断条件建立决策树
@@ -74,8 +74,8 @@ data.behavior.tree.test<-data.behavior.tree.process[-sub]
 tr_ctree<-ctree(clusterDescribe~isWorkday+h8+h9+h10+h11+h12
                 +h13+h14+h15+h16+h17+h18
                 +h19+h20+h21+h22,data=data.behavior.tree.training)
-# tr_ctree<-prune(tr_ctree,cp=0.0125)#怎么剪枝呢
-plot(tr_ctree)#可视化看不得
+tr_ctree<-prune(tr_ctree,cp=0.0125)#怎么剪枝呢
+plot(tr_ctree)#可视化看不得，不适用
 ctree.predict<-predict(tr_ctree,data.behavior.tree.test)
 capture.output(confusionMatrix(table(ctree.predict,data.behavior.tree.test$clusterDescribe)),file = "ctree_evaluate.txt")
 # Accuracy : 0.9773          
