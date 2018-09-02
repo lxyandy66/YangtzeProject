@@ -36,6 +36,7 @@ data.hznu.raw<-data.hznu.raw[! ac_code%in%unique(nn$ac_code)]#把对不上的空调记录
 #开关机阈值清洗
 data.hznu.raw$on_off<-ifelse(data.hznu.raw$on_off=="开机",1,0)
 data.hznu.raw$on_off<-ifelse(data.hznu.raw$total_elec<=0.2,0,1)
+data.hznu.raw[on_off==0]$total_elec<-0
 
 ####天气合并####
 #天气数据处理
@@ -103,10 +104,20 @@ length(data.hznu.predict[total_elec>ecLim]$time)/length(data.hznu.predict[on_off
 #[1] 0.04784139
 
 data.hznu.predict.modify<-data.hznu.predict[total_elec>ecLim]
+data.hznu.predict.modify$modifyElec<-ecLim+((data.hznu.predict.modify$total_elec-ecLim)/10)
 data.hznu.predict$modifyElec<- data.hznu.predict$total_elec
-data.hznu.predict[labelBuildingHour %in% data.hznu.predict.modify$labelBuildingHour]$modifyElec<- 
-  ecLim+((data.hznu.predict[labelBuildingHour %in% data.hznu.predict.modify$labelBuildingHour]$total_elec-ecLim)/10)
+data.hznu.predict[labelAcHour %in% data.hznu.predict.modify$labelAcHour]$modifyElec<- 
+  data.hznu.predict.modify$modifyElec
 rm(data.hznu.predict.modify)
+
+data.hznu.predict$modifyElec<-data.hznu.predict$total_elec
+data.hznu.predict.normal<-data.hznu.predict[total_elec<=ecLim]
+data.hznu.predict.modify<-data.hznu.predict[total_elec>ecLim]
+data.hznu.predict.modify$modifyElec<-ecLim+((data.hznu.predict.modify$total_elec-ecLim)/10)
+data.hznu.predict<-rbind(data.hznu.predict.modify,data.hznu.predict.normal)
+rm(data.hznu.predict.modify)
+rm(data.hznu.predict.normal)
+
 ##如果效果不佳考虑直接用均值代替
 
 
@@ -129,9 +140,14 @@ data.hznu.predict.hour<-data.hznu.predict[,.(time=time[1],ac_code=ac_code[1],
                                              w_hum = mean(w_hum)
                                              ),by=labelAcHour]
 
+save(data.hznu.predict,file = "HZNU_预测用原始数据_半小时_已清洗能耗及热环境数据.rdata")
+
 ####将数据转换为建筑小时级数据####
 #data.hznu.predict为原始末端数据，已过滤及清洗
 data.hznu.predict$date<-as.Date(data.hznu.predict$time)
+data.hznu.predict<-data.hznu.predict[!duplicated(data.hznu.predict)]
+data.hznu.predict[on_off==0]$modifyElec<-0
+data.hznu.predict[on_off==0]$total_elec<-0
 data.regress.total <- data.hznu.predict[, .(
   buildingCode = unique(buildingCode),
   date = unique(date),
@@ -149,6 +165,8 @@ data.regress.total <- data.hznu.predict[, .(
   w_hum = mean(w_hum)
 ), by = labelBuildingHour]
 data.regress.total$time<-as.POSIXct(data.regress.total$time,format="%Y-%m-%d %H")
+
+ggplot(data=data.regress.total,aes(x=on_ratio,y=total_elec))+geom_point(aes(color=buildingCode))
 
 rm(newdata)
 gc()

@@ -12,35 +12,68 @@ load("2018-6-6.RData")#HZNU用电数据
 
 ####利用已生成的能耗序列对能耗模型进行修正####
 #实际能耗=f(时间序列能耗，室外温度，etc)
-data.regress.raw<-nn
+#data.regress.raw<-nn
+
+data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
+
+#统计该季节时间段情况下有完整时间序列建筑的个数
+data.regress.summary<-data.regress.raw[,.(count=length(time)),by=buildingCode]
+data.regress.summary<-data.regress.summary[count==1464]
+buildingSelect<-"330100D267"
+data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
+data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
+
+# > unique(data.regress.summary[count==1464]$buildingCode)
+# [1] "330100D250" "330100D253" "330100D265" "330100D262" "330100D257" "330100D261" "330100D267" "330100D268" "330100D269" "330100D278"
+# [11] "330100D275" "330100D271"
+# 好样本：330100D261 
+
+####时间序列构建####
+timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,5,1,0),frequency = 24)
+fit<-ets(timeSeries,model = "AAA")
+
+####用于预测值绘图####
+fcst<-forecast(fit,24)
+plot(fcst)
+
+####时间序列能耗值的绘图####
+data.regress.raw$time_sep<-fit$fitted
+data.regress.raw[total_elec==0]$time_sep<-0
+data.regress.raw[time_sep<=0]$time_sep<-0
+ggplot(data = data.regress.raw,aes(x=time))+geom_line(aes(y=total_elec))+geom_line(aes(y=time_sep,color="red"))
+
 data.regress.raw$deltaEC<-data.regress.raw$total_elec - data.regress.raw$time_sep
 data.regress.raw$ecHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw)-1)]$total_elec
 data.regress.raw$ecDayBefore<-data.regress.raw[c(1:24,1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$ecWeekBefore<-data.regress.raw[c(1:(24*7),1:nrow(data.regress.raw))]$total_elec
 
 #夏季温和
-data.regress.process <- data.regress.raw[on_ratio>0&total_elec>0& (month(time) == 5 | month(time) == 6),
-                       c("build_code","time","temp_diff","on_ratio","set_temp","real_temp","w_temp","w_hum",
-                         "time_sep","ecHourBefore","ecDayBefore","ecWeekBefore","total_elec")]
+data.regress.process <- data.regress.raw[1000:nrow(data.regress.raw),
+                       c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum",
+                         "time_sep","deltaEC","ecHourBefore","ecDayBefore","ecWeekBefore")]
 data.regress.process<-na.omit(data.regress.process)
 
-####变量相关性及分布####
-scatterplotMatrix(data.regress.process[,3:ncol(data.regress.process)],smoother=list(lty=2),
-                  plot.points = FALSE,main="ScatterPlot without 0 EC Data")
-cor(data.regress.process[, 3:ncol(data.regress.process)], use = "complete.obs")
-#相关矩阵如下(含零能耗记录)
-#             temp_diff    on_ratio    set_temp  real_temp      w_temp       w_hum   time_sep  total_elec
-# total_elec  0.44015383 -0.04585804 -0.03313324  0.4272608  0.53695398 -0.14108668  0.8383870  1.00000000
-#相关性矩阵(不含零能耗记录)
-#             temp_diff   on_ratio   set_temp  real_temp     w_temp       w_hum    time_sep   total_elec
-# total_elec  0.002200785  0.7604641  0.1256533  0.1528087  0.6136918 -0.32046952  0.74128579  1.000000000
 
 ####将数据分为训练集和预测集####
 set.seed(32767)
 sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*0.7))#三七开
-data.regress.traning<-data.regress.process[sub,]
+data.regress.training<-data.regress.process[sub,]
 data.regress.test<-data.regress.process[-sub,]
 
+
+
+####变量相关性及分布####
+scatterplotMatrix(data.regress.process[,3:ncol(data.regress.process)],smoother=list(lty=2),
+                  plot.points = FALSE,main="ScatterPlot without 0 EC Data")
+cor(data.regress.process[, 3:(ncol(data.regress.process)-3)], use = "complete.obs")
+#相关矩阵如下(含零能耗记录)|未清洗能耗
+#             temp_diff    on_ratio    set_temp  real_temp      w_temp       w_hum   time_sep  total_elec
+# total_elec  0.44015383 -0.04585804 -0.03313324  0.4272608  0.53695398 -0.14108668  0.8383870  1.00000000
+#相关性矩阵(不含零能耗记录)|未清洗能耗
+#             temp_diff   on_ratio   set_temp  real_temp     w_temp       w_hum    time_sep   total_elec
+# total_elec  0.002200785  0.7604641  0.1256533  0.1528087  0.6136918 -0.32046952  0.74128579  1.000000000
+
+###################
 ####原始未调整参数####
 regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                  on_ratio+
@@ -48,13 +81,13 @@ regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                  w_temp+
                  w_hum+
                  real_temp+
-                 set_temp,data=data.regress.traning)#未调整_多元线性回归
-regressFit<-plsr(total_elec~time_sep+ecHourBefore+#ecDayBefore+ecWeekBefore+
+                 set_temp,data=data.regress.training)#未调整_多元线性回归
+regressFit<-plsr(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                    on_ratio+temp_diff+
                    w_temp+
                    w_hum+
                    real_temp+
-                   set_temp,data=data.regress.traning,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
+                   set_temp,data=data.regress.training,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
 ####调参数####
 regressFit<-lm(total_elec~time_sep+ecHourBefore+#ecDayBefore+ecWeekBefore+
                  I((on_ratio)^0.5)+
@@ -62,13 +95,13 @@ regressFit<-lm(total_elec~time_sep+ecHourBefore+#ecDayBefore+ecWeekBefore+
                  w_temp+I(w_temp^2)+I(w_temp^3)+
                  I(exp(w_hum)^-1)+
                  I((real_temp)^3)+I(real_temp^2)+
-                 I(set_temp^2)+set_temp,data=data.regress.traning)#多元线性回归
+                 I(set_temp^2)+set_temp,data=data.regress.training)#多元线性回归
 
 regressFit<-plsr(total_elec~time_sep+ecHourBefore+
                    on_ratio+
                    w_temp+I(temp_diff^2)+
                    I(real_temp^2)+
-                   set_temp,data=data.regress.traning,validation="LOO",jackknife=TRUE)
+                   set_temp,data=data.regress.training,validation="LOO",jackknife=TRUE)
 ####回归诊断####
 #模型参数
 summary(regressFit,what = "all")
@@ -77,28 +110,22 @@ R2(regressFit)
 coef(regressFit)
 
 ####回归实际误差判断####
-regress.predict<-data.table(predict(regressFit,data.regress.traning))
-data.nn<-data.table(data.regress.process$time_sep,data.regress.process$total_elec)
-getMAPE(nn$total_elec,nn$time_sep)
+regress.predict<-data.table(predict(regressFit,data.regress.training))
+# data.nn<-data.table(data.regress.process$time_sep,data.regress.process$total_elec)
+# getMAPE(nn$total_elec,nn$time_sep)
 
-paste("训练集MAPE：",getMAPE(regress.predict$V1,data.regress.traning$total_elec))
-paste("训练集MAE：",getMAE(regress.predict$V1,data.regress.traning$total_elec))
-paste("训练集原始时间序列MAPE：",getMAPE(data.regress.traning$time_sep,data.regress.traning$total_elec))
-paste("训练集原始时间序列MAE：",getMAE(data.regress.traning$time_sep,data.regress.traning$total_elec))
+plot(regress.predict$V1,type="l")
+paste("训练集MAPE：",getMAPE(regress.predict$V1,data.regress.training$total_elec))
+paste("训练集MAE：",getMAE(regress.predict$V1,data.regress.training$total_elec))
+paste("训练集原始时间序列MAPE：",getMAPE(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec))
+paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec))
 
-data.nn$mape<-data.table(abs((data.nn$V1-data.nn$V2)/data.nn$V2))
-for(i in 1:nrow(mape)){
-  if(mape$V1[i]=="NaN"){
-    mape$V1[i]<-0
-  }
-}
-mean(mape$V1)
 
 regress.predict<-data.table(predict(regressFit,data.regress.test))
 paste("预测集MAPE：",getMAPE(regress.predict$V1,data.regress.test$total_elec))
 paste("预测集MAE：",getMAE(regress.predict$V1,data.regress.test$total_elec))
-paste("训练集原始时间序列MAPE：",getMAPE(data.regress.test$time_sep,data.regress.test$total_elec))
-paste("训练集原始时间序列MAE：",getMAE(data.regress.test$time_sep,data.regress.test$total_elec))
+paste("训练集原始时间序列MAPE：",getMAPE(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec))
+paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec))
 
 
 ####原始时间序列误差####
@@ -128,16 +155,24 @@ summary(gvlma(regressFit))
 
 
 ####SVM回归####
-x.training<-as.matrix(data.regress.traning[,c("temp_diff","on_ratio","real_temp","w_temp","time_sep")])
-y.training<-as.matrix(data.regress.traning[,"total_elec"])
-x.test<-as.matrix(data.regress.test[,c("temp_diff","on_ratio","real_temp","w_temp","time_sep")])
+x.training<-as.matrix(data.regress.training[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore")])
+y.training<-as.matrix(data.regress.training[,"total_elec"])
+x.test<-as.matrix(data.regress.test[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore")])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
+#指标检验
 getRSquare(training.predict$V1,y.training)
 getRSquare(test.predict$V1,y.test)
+getMAPE(training.predict$V1,y.training)
+getMAPE(test.predict$V1,y.test)
 regm
+
+plot(y.training,type="o",main=buildingSelect)
+lines(training.predict$V1,type = "o",col="red")
+# lines(as.matrix(data.regress.training$time_sep),type="o",col="blue")
+
 
 
 #confusionMatrix(test.predict,y.test)
@@ -164,22 +199,29 @@ residplot <- function(fit, nbreaks=10) {
 }
 getRSquare<-function(pred,ref){
   data.caculate<-data.table(pred=pred,ref=ref)
+  data.caculate<-na.omit(data.caculate)
   data.caculate$SSE<-(data.caculate$pred- data.caculate$ref)^2
   data.caculate$SST<-(data.caculate$pred- mean(data.caculate$ref,na.rm = TRUE))^2
   return( 1- ( sum(data.caculate$SSE) / sum(data.caculate$SST) ) )
 }
 
 getMAPE<-function(yPred,yLook){
-  mape<-data.table(abs((yPred-yLook)/yLook))
-  for(i in 1:nrow(mape)){
-    if(mape$V1[i]=="NaN"){
-      mape$V1[i]<-0
-    }
-  }
-  mean(mape$V1)
+  # mape<-as.matrix(abs((yPred-yLook)/yLook))
+  # View(mape)
+  # for(i in 1:nrow(mape)){
+  #   if(mape$V1[i]=="NaN"){
+  #     mape$V1[i]<-0
+  #   }
+  # }
+  # mape[V1=="NaN"]$V1<-0
+  error.table<-data.table(pred=yPred,look=yLook)
+  error.table<-na.omit(error.table)
+  mean(as.matrix(abs((error.table$pred-error.table$look)/error.table$look)),na.rm = TRUE)
 }
 getMAE<-function(yPred,yLook){
   mae<-data.table(abs(yPred-yLook))
-  mean(mae$V1)
+  mean(mae$V1,na.rm = TRUE)
 }
-
+getMaxPredictError<-function(yPred,yLook){
+  return(max(abs((yLook-yPred)/yLook)))
+}
