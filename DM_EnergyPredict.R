@@ -19,48 +19,55 @@ data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
 #统计该季节时间段情况下有完整时间序列建筑的个数
 data.regress.summary<-data.regress.raw[,.(count=length(time)),by=buildingCode]
 data.regress.summary<-data.regress.summary[count==1464]
-buildingSelect<-"330100D267"
+buildingSelect<-"330100D268"
 data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
 data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
 
 # > unique(data.regress.summary[count==1464]$buildingCode)
 # [1] "330100D250" "330100D253" "330100D265" "330100D262" "330100D257" "330100D261" "330100D267" "330100D268" "330100D269" "330100D278"
 # [11] "330100D275" "330100D271"
-# 好样本：330100D261 
+# 合格样本：330100D261 330100D267 330100D268 330100D269 330100D278 330100D275 330100D271
+# 好样本：330100D268(90+/29/25)
 
 ####时间序列构建####
 timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,5,1,0),frequency = 24)
 fit<-ets(timeSeries,model = "AAA")
 
 ####用于预测值绘图####
-fcst<-forecast(fit,24)
-plot(fcst)
+# fcst<-forecast(fit,24)
+# plot(fcst)
 
 ####时间序列能耗值的绘图####
 data.regress.raw$time_sep<-fit$fitted
 data.regress.raw[total_elec==0]$time_sep<-0
 data.regress.raw[time_sep<=0]$time_sep<-0
-ggplot(data = data.regress.raw,aes(x=time))+geom_line(aes(y=total_elec))+geom_line(aes(y=time_sep,color="red"))
+# ggplot(data = data.regress.raw,aes(x=time))+geom_line(aes(y=total_elec))+geom_line(aes(y=time_sep,color="red"))
+# plot(data.regress.raw$total_elec,type="p")
+# lines(data.regress.raw$total_elec,type="l",col="red")
 
 data.regress.raw$deltaEC<-data.regress.raw$total_elec - data.regress.raw$time_sep
 data.regress.raw$ecHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw)-1)]$total_elec
 data.regress.raw$ecDayBefore<-data.regress.raw[c(1:24,1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$ecWeekBefore<-data.regress.raw[c(1:(24*7),1:nrow(data.regress.raw))]$total_elec
+data.regress.raw$deltaECHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$deltaEC
+setorder(data.regress.raw,time)
 
 #夏季温和
-data.regress.process <- data.regress.raw[1000:nrow(data.regress.raw),
+processStart<-1000#sample(1:(nrow(data.regress.raw)-24*7*2),1)#随机取起始点
+data.regress.process <- data.regress.raw[processStart:(processStart+24*7*2),
                        c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum",
-                         "time_sep","deltaEC","ecHourBefore","ecDayBefore","ecWeekBefore")]
+                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore")]
 data.regress.process<-na.omit(data.regress.process)
 
 
 ####将数据分为训练集和预测集####
-set.seed(32767)
-sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*0.7))#三七开
+#set.seed(32767)
+sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*2/3))#三七开
 data.regress.training<-data.regress.process[sub,]
 data.regress.test<-data.regress.process[-sub,]
 
-
+data.regress.training<-data.regress.process[1:round(nrow(data.regress.process)*2/3),]
+data.regress.test<-data.regress.process[round(nrow(data.regress.process)*2/3):nrow(data.regress.process),]
 
 ####变量相关性及分布####
 scatterplotMatrix(data.regress.process[,3:ncol(data.regress.process)],smoother=list(lty=2),
@@ -82,8 +89,8 @@ regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                  w_hum+
                  real_temp+
                  set_temp,data=data.regress.training)#未调整_多元线性回归
-regressFit<-plsr(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
-                   on_ratio+temp_diff+
+regressFit<-plsr(total_elec~time_sep+ecWeekBefore+
+                   on_ratio+temp_diff+temp_diffRatio+deltaECHourBefore+
                    w_temp+
                    w_hum+
                    real_temp+
@@ -110,23 +117,29 @@ R2(regressFit)
 coef(regressFit)
 
 ####回归实际误差判断####
-regress.predict<-data.table(predict(regressFit,data.regress.training))
+regress.predict<-(predict(regressFit,data.regress.training))
+regress.predict<-data.table(regress.predict[,1,dim(regress.predict)[3]])
 # data.nn<-data.table(data.regress.process$time_sep,data.regress.process$total_elec)
 # getMAPE(nn$total_elec,nn$time_sep)
 
-plot(regress.predict$V1,type="l")
 paste("训练集MAPE：",getMAPE(regress.predict$V1,data.regress.training$total_elec))
-paste("训练集MAE：",getMAE(regress.predict$V1,data.regress.training$total_elec))
+# paste("训练集MAE：",getMAE(regress.predict$V1,data.regress.training$total_elec))
 paste("训练集原始时间序列MAPE：",getMAPE(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec))
-paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec))
+# paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec))
+par(mfrow=c(2,1))
+plot(data.regress.training$total_elec,type="o",main=paste(buildingSelect,"PLS Regress"))
+lines(regress.predict$V1,type="o",col="red")
+lines(as.numeric(data.regress.training$time_sep),type="o",col="blue",lty=2)
 
-
-regress.predict<-data.table(predict(regressFit,data.regress.test))
+regress.predict<-(predict(regressFit,data.regress.test))
+regress.predict<-data.table(regress.predict[,1,dim(regress.predict)[3]])
 paste("预测集MAPE：",getMAPE(regress.predict$V1,data.regress.test$total_elec))
-paste("预测集MAE：",getMAE(regress.predict$V1,data.regress.test$total_elec))
+# paste("预测集MAE：",getMAE(regress.predict$V1,data.regress.test$total_elec))
 paste("训练集原始时间序列MAPE：",getMAPE(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec))
-paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec))
-
+# paste("训练集原始时间序列MAE：",getMAE(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec))
+plot(data.regress.test$total_elec,type="o")
+lines(regress.predict$V1,type="o",col="red")
+lines(as.numeric(data.regress.test$time_sep),type="o",col="blue",lty=2)
 
 ####原始时间序列误差####
 
@@ -155,11 +168,12 @@ summary(gvlma(regressFit))
 
 
 ####SVM回归####
-x.training<-as.matrix(data.regress.training[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore")])
+x.training<-as.matrix(data.regress.training[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore","deltaECHourBefore","time_sep")])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
-x.test<-as.matrix(data.regress.test[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore")])
+x.test<-as.matrix(data.regress.test[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore","deltaECHourBefore","time_sep")])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
-regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
+# regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
+regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=256,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
 #指标检验
@@ -169,13 +183,15 @@ getMAPE(training.predict$V1,y.training)
 getMAPE(test.predict$V1,y.test)
 regm
 
-plot(y.training,type="o",main=buildingSelect)
+par(mfrow=c(2,1))
+plot(y.training,type="o",main=paste(buildingSelect,"SVM-Training Set"))
 lines(training.predict$V1,type = "o",col="red")
-# lines(as.matrix(data.regress.training$time_sep),type="o",col="blue")
+lines(as.matrix(data.regress.training$time_sep),type="o",lty=2,col="blue")
 
+plot(y.test,type="o",main=paste(buildingSelect,"SVM-Test Set"))
+lines(test.predict$V1,type = "o",col="red")
+lines(as.matrix(data.regress.test$time_sep),type="o",lty=2,col="blue")
 
-
-#confusionMatrix(test.predict,y.test)
 
 ####用于回归诊断等的函数####
 hat.plot <- function(fit){
