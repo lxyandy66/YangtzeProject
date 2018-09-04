@@ -166,6 +166,26 @@ data.regress.total <- data.hznu.predict[, .(
 ), by = labelBuildingHour]
 data.regress.total$time<-as.POSIXct(data.regress.total$time,format="%Y-%m-%d %H")
 
+####行为聚类影响因素加入####
+#行为聚类的预处理
+raw.periodOn$labelDay<-paste(substr(raw.periodOn$ac_code,1,10),raw.periodOn$date,sep = "-")
+data.regress.behavior.raw<-melt(raw.periodOn[,-c("label","runtime","isWorkday")],id=c("labelDay","cluster","date","ac_code"))
+names(data.regress.behavior.raw)[6]<-"on_off"
+names(data.regress.behavior.raw)[5]<-"hour"
+data.regress.behavior.raw$hour<-as.character(data.regress.behavior.raw$hour)
+data.regress.behavior.raw$hour<-gsub("h","",data.regress.behavior.raw$hour)
+data.regress.behavior.raw$hour<-as.numeric(data.regress.behavior.raw$hour)
+data.regress.behavior.raw$labelBuildingHour<-paste(data.regress.behaviorCluster$labelDay,sprintf("%02d",data.regress.behaviorCluster$hour),sep = "-")
+data.regress.behavior.raw$modifyCluster<-data.regress.behavior.raw$cluster
+data.regress.behavior.raw[cluster==5|cluster==6]$modifyCluster<-2
+data.regress.behavior.raw[cluster==4]$modifyCluster<-3
+data.regress.behaviorCluster<-data.regress.behavior.raw[,.(
+  buildingCode=substr(ac_code[1],1,10),
+  date=date[1],
+  sum=length(ac_code),
+  c1Ratio=length(cluster=="1")/length(ac_code)
+),by=labelBuildingHour]
+
 ggplot(data=data.regress.total,aes(x=on_ratio,y=total_elec))+geom_point(aes(color=buildingCode))
 
 rm(newdata)
