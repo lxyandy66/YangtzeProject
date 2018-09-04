@@ -33,6 +33,10 @@ data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
 timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,5,1,0),frequency = 24)
 fit<-ets(timeSeries,model = "AAA")
 
+####预测冷负荷值生成####
+data.regress.raw$hour<-hour(data.regress.raw$time)
+data.regress.raw$estCoolingLoad<-getEstCoolingLoad(data.regress.raw$w_temp,hour(data.regress.raw$time))
+data.regress.raw$deltaInOutTemp<-data.regress.raw$w_temp-data.regress.raw$real_temp
 ####用于预测值绘图####
 # fcst<-forecast(fit,24)
 # plot(fcst)
@@ -41,7 +45,8 @@ fit<-ets(timeSeries,model = "AAA")
 data.regress.raw$time_sep<-fit$fitted
 data.regress.raw[total_elec==0]$time_sep<-0
 data.regress.raw[time_sep<=0]$time_sep<-0
-# ggplot(data = data.regress.raw,aes(x=time))+geom_line(aes(y=total_elec))+geom_line(aes(y=time_sep,color="red"))
+ggplot(data = data.regress.raw[date=="2017-06-22"],aes(x=time))+geom_line(aes(y=total_elec))+geom_line(aes(y=time_sep,color="red"))+
+  geom_line(aes(y=estCoolingLoad/5,color="blue"))+geom_line(aes(y=on_ratio*100,color="green"))+geom_line(aes(y=(-cos((pi/12)*hour))*10))
 # plot(data.regress.raw$total_elec,type="p")
 # lines(data.regress.raw$total_elec,type="l",col="red")
 
@@ -55,16 +60,19 @@ setorder(data.regress.raw,time)
 #夏季温和
 processStart<-1000#sample(1:(nrow(data.regress.raw)-24*7*2),1)#随机取起始点
 data.regress.process <- data.regress.raw[processStart:(processStart+24*7*2),
-                       c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum",
-                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore")]
+                       c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum","deltaInOutTemp",
+                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore","estCoolingLoad")]
 data.regress.process<-na.omit(data.regress.process)
+ggplot(data = data.regress.process,aes(x=time))+geom_line(aes(y=total_elec))+
+  geom_line(aes(y=time_sep,color="red"))+geom_line(aes(y=(sin((pi/12)*hour*10))))+
+  geom_line(aes(y=on_ratio*100,color="green"))+geom_line(aes(y=w_temp))+geom_line(aes(y=deltaInOutTemp,color="orange"))
 
 
 ####将数据分为训练集和预测集####
 #set.seed(32767)
-sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*2/3))#三七开
-data.regress.training<-data.regress.process[sub,]
-data.regress.test<-data.regress.process[-sub,]
+# sub<-sample(1:nrow(data.regress.process),round(nrow(data.regress.process)*2/3))#三七开
+# data.regress.training<-data.regress.process[sub,]
+# data.regress.test<-data.regress.process[-sub,]
 
 data.regress.training<-data.regress.process[1:round(nrow(data.regress.process)*2/3),]
 data.regress.test<-data.regress.process[round(nrow(data.regress.process)*2/3):nrow(data.regress.process),]
@@ -91,7 +99,7 @@ regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                  set_temp,data=data.regress.training)#未调整_多元线性回归
 regressFit<-plsr(total_elec~time_sep+ecWeekBefore+
                    on_ratio+temp_diff+temp_diffRatio+deltaECHourBefore+
-                   w_temp+
+                   w_temp+deltaInOutTemp+estCoolingLoad+
                    w_hum+
                    real_temp+
                    set_temp,data=data.regress.training,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
@@ -168,12 +176,16 @@ summary(gvlma(regressFit))
 
 
 ####SVM回归####
-x.training<-as.matrix(data.regress.training[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore","deltaECHourBefore","time_sep")])
+x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp",
+                                               "deltaInOutTemp","temp_diff","estCoolingLoad",
+                                               "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep")])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
-x.test<-as.matrix(data.regress.test[,c("temp_diff","on_ratio","real_temp","w_hum","w_temp","ecWeekBefore","deltaECHourBefore","time_sep")])
+x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp",
+                                       "deltaInOutTemp","temp_diff","estCoolingLoad",
+                                       "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep")])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 # regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
-regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=256,cross=10)
+regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=2048,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
 #指标检验
@@ -187,10 +199,31 @@ par(mfrow=c(2,1))
 plot(y.training,type="o",main=paste(buildingSelect,"SVM-Training Set"))
 lines(training.predict$V1,type = "o",col="red")
 lines(as.matrix(data.regress.training$time_sep),type="o",lty=2,col="blue")
-
 plot(y.test,type="o",main=paste(buildingSelect,"SVM-Test Set"))
 lines(test.predict$V1,type = "o",col="red")
 lines(as.matrix(data.regress.test$time_sep),type="o",lty=2,col="blue")
+
+ggplot(data=data.regress.test[as.Date.character(data.regress.test$time)=="2017-06-22"],aes(x=time))+
+  geom_line(aes(y=time_sep),color="red")+geom_line(aes(y=estCoolingLoad/30),color="blue")+geom_line(aes(y=real_temp),color="grey")+
+  geom_line(aes(y=on_ratio*100),color="green")+geom_line(aes(y=w_temp))+geom_line(aes(y=deltaInOutTemp),color="orange")
+
+####负荷估算等方法####
+getEstCoolingLoad<-function(outTemp,hour){
+  #这个拟合公式肯定有问题
+  if(hour>19){
+    param<-c(6.0349,2.3776,289.6508)
+  }else if(hour>14){
+    param<-c(30.826,5.3092,508.4841)
+  }else if(hour>9){
+    param<-c(0.6486,21.9506,604.5024)
+  }else if(hour>6){
+    param<-c(105.826,-2.2768,521.9676)
+  }else{
+    param<-c(12.9257,-2.2768,331.8660)#0~6
+  }
+  # return(param[1]*(outTemp-26)*(sin((pi/12)*hour+param[2]))+param[3])
+  return(param[1]*(outTemp-26)*sin((pi/12)*hour+param[2]))
+}
 
 
 ####用于回归诊断等的函数####
@@ -222,14 +255,6 @@ getRSquare<-function(pred,ref){
 }
 
 getMAPE<-function(yPred,yLook){
-  # mape<-as.matrix(abs((yPred-yLook)/yLook))
-  # View(mape)
-  # for(i in 1:nrow(mape)){
-  #   if(mape$V1[i]=="NaN"){
-  #     mape$V1[i]<-0
-  #   }
-  # }
-  # mape[V1=="NaN"]$V1<-0
   error.table<-data.table(pred=yPred,look=yLook)
   error.table<-na.omit(error.table)
   mean(as.matrix(abs((error.table$pred-error.table$look)/error.table$look)),na.rm = TRUE)
