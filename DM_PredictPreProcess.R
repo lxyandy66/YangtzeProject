@@ -175,15 +175,22 @@ names(data.regress.behavior.raw)[5]<-"hour"
 data.regress.behavior.raw$hour<-as.character(data.regress.behavior.raw$hour)
 data.regress.behavior.raw$hour<-gsub("h","",data.regress.behavior.raw$hour)
 data.regress.behavior.raw$hour<-as.numeric(data.regress.behavior.raw$hour)
-data.regress.behavior.raw$labelBuildingHour<-paste(data.regress.behaviorCluster$labelDay,sprintf("%02d",data.regress.behaviorCluster$hour),sep = "-")
+data.regress.behavior.raw$hour<-data.regress.behavior.raw$hour+7
+data.regress.behavior.raw$labelBuildingHour<-paste(data.regress.behaviorCluster$labelDay,
+                                                   sprintf("%02d",data.regress.behaviorCluster$hour),sep = "-")
 data.regress.behavior.raw$modifyCluster<-data.regress.behavior.raw$cluster
 data.regress.behavior.raw[cluster==5|cluster==6]$modifyCluster<-2
 data.regress.behavior.raw[cluster==4]$modifyCluster<-3
 data.regress.behaviorCluster<-data.regress.behavior.raw[,.(
   buildingCode=substr(ac_code[1],1,10),
   date=date[1],
-  sum=length(ac_code),
-  c1Ratio=length(cluster=="1")/length(ac_code)
+  activeAcSum=length(ac_code),
+  onCount=sum(on_off),
+  activeAcRatio=sum(on_off)/length(ac_code),
+  c1Ratio=length(unique(ac_code[modifyCluster==1]))/length(unique(ac_code)),
+  c2Ratio=length(unique(ac_code[modifyCluster==2]))/length(unique(ac_code)),
+  c3Ratio=length(unique(ac_code[modifyCluster==3]))/length(unique(ac_code)),
+  c4Ratio=length(unique(ac_code[modifyCluster==4]))/length(unique(ac_code))
 ),by=labelBuildingHour]
 
 ggplot(data=data.regress.total,aes(x=on_ratio,y=total_elec))+geom_point(aes(color=buildingCode))
