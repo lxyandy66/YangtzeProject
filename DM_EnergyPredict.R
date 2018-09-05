@@ -19,15 +19,16 @@ data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
 #统计该季节时间段情况下有完整时间序列建筑的个数
 data.regress.summary<-data.regress.raw[,.(count=length(time)),by=buildingCode]
 data.regress.summary<-data.regress.summary[count==1464]
-buildingSelect<-"330100D268"
-data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
-data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
-
 # > unique(data.regress.summary[count==1464]$buildingCode)
 # [1] "330100D250" "330100D253" "330100D265" "330100D262" "330100D257" "330100D261" "330100D267" "330100D268" "330100D269" "330100D278"
 # [11] "330100D275" "330100D271"
 # 合格样本：330100D261 330100D267 330100D268 330100D269 330100D278 330100D275 330100D271
 # 好样本：330100D268(90+/29/25)
+
+buildingSelect<-"330100D268"
+data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
+data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
+
 
 ####时间序列构建####
 timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,5,1,0),frequency = 24)
@@ -55,13 +56,18 @@ data.regress.raw$ecHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw)-1)]
 data.regress.raw$ecDayBefore<-data.regress.raw[c(1:24,1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$ecWeekBefore<-data.regress.raw[c(1:(24*7),1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$deltaECHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$deltaEC
+data.regress.raw$c1Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c1Ratio
+data.regress.raw$c2Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c2Ratio
+data.regress.raw$c3Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c3Ratio
+data.regress.raw$c4Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c4Ratio
 setorder(data.regress.raw,time)
 
 #夏季温和
 processStart<-1000#sample(1:(nrow(data.regress.raw)-24*7*2),1)#随机取起始点
 data.regress.process <- data.regress.raw[processStart:(processStart+24*7*2),
                        c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum","deltaInOutTemp",
-                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore","estCoolingLoad")]
+                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore","estCoolingLoad",
+                         "c1Ratio","c2Ratio","c3Ratio","c4Ratio","hour")]
 data.regress.process<-na.omit(data.regress.process)
 ggplot(data = data.regress.process,aes(x=time))+geom_line(aes(y=total_elec))+
   geom_line(aes(y=time_sep,color="red"))+geom_line(aes(y=(sin((pi/12)*hour*10))))+
@@ -91,18 +97,18 @@ cor(data.regress.process[, 3:(ncol(data.regress.process)-3)], use = "complete.ob
 ###################
 ####原始未调整参数####
 regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
-                 on_ratio+
+                 on_ratio+hour+
                  temp_diff+
                  w_temp+
                  w_hum+
                  real_temp+
                  set_temp,data=data.regress.training)#未调整_多元线性回归
-regressFit<-plsr(total_elec~time_sep+ecWeekBefore+
+regressFit<-plsr(total_elec~time_sep+ecWeekBefore+hour+
                    on_ratio+temp_diff+temp_diffRatio+deltaECHourBefore+
                    w_temp+deltaInOutTemp+estCoolingLoad+
                    w_hum+
-                   real_temp+
-                   set_temp,data=data.regress.training,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
+                   real_temp+set_temp+
+                   c1Ratio+c2Ratio+c3Ratio+c4Ratio,data=data.regress.training,validation="LOO",jackknife=TRUE)#未调整_偏最小二乘
 ####调参数####
 regressFit<-lm(total_elec~time_sep+ecHourBefore+#ecDayBefore+ecWeekBefore+
                  I((on_ratio)^0.5)+
@@ -176,16 +182,18 @@ summary(gvlma(regressFit))
 
 
 ####SVM回归####
-x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp",
+x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp","hour",
                                                "deltaInOutTemp","temp_diff","estCoolingLoad",
-                                               "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep")])
+                                               "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep",
+                                               "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
-x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp",
+x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp","hour",
                                        "deltaInOutTemp","temp_diff","estCoolingLoad",
-                                       "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep")])
+                                       "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep",
+                                       "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 # regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
-regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=2048,cross=10)
+regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=1024,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
 #指标检验
@@ -221,8 +229,8 @@ getEstCoolingLoad<-function(outTemp,hour){
   }else{
     param<-c(12.9257,-2.2768,331.8660)#0~6
   }
-  # return(param[1]*(outTemp-26)*(sin((pi/12)*hour+param[2]))+param[3])
-  return(param[1]*(outTemp-26)*sin((pi/12)*hour+param[2]))
+  return(param[1]*(outTemp-26)*(sin((pi/12)*hour+param[2]))+param[3])
+  # return(param[1]*(outTemp-26)*sin((pi/12)*hour+param[2]))
 }
 
 

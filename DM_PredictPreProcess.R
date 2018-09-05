@@ -148,6 +148,13 @@ data.hznu.predict$date<-as.Date(data.hznu.predict$time)
 data.hznu.predict<-data.hznu.predict[!duplicated(data.hznu.predict)]
 data.hznu.predict[on_off==0]$modifyElec<-0
 data.hznu.predict[on_off==0]$total_elec<-0
+#对空调加入行为模式属性
+raw.periodOn$modifyCluster<-raw.periodOn$cluster
+raw.periodOn[cluster==5|cluster==6]$modifyCluster<-2
+raw.periodOn[cluster==4]$modifyCluster<-3
+data.hznu.predict$labelDay<-paste(data.hznu.predict$ac_code,data.hznu.predict$date,sep = "-")
+data.hznu.predict<-merge(x=data.hznu.predict,y=raw.periodOn[,c("label","modifyCluster")],by.x="labelDay",by.y="label",all.x=TRUE)
+
 data.regress.total <- data.hznu.predict[, .(
   buildingCode = unique(buildingCode),
   date = unique(date),
@@ -162,38 +169,52 @@ data.regress.total <- data.hznu.predict[, .(
   total_elec = sum(modifyElec),
   w_temp = mean(w_temp),
   w_winds = mean(w_winds),
-  w_hum = mean(w_hum)
+  w_hum = mean(w_hum),
+  c1Ratio=length(unique(ac_code[on_off==1&modifyCluster==1&!is.na(modifyCluster)]))/length(unique(ac_code[on_off==1&!is.na(modifyCluster)])),
+  c2Ratio=length(unique(ac_code[on_off==1&modifyCluster==2&!is.na(modifyCluster)]))/length(unique(ac_code[on_off==1&!is.na(modifyCluster)])),
+  c3Ratio=length(unique(ac_code[on_off==1&modifyCluster==3&!is.na(modifyCluster)]))/length(unique(ac_code[on_off==1&!is.na(modifyCluster)])),
+  c4Ratio=length(unique(ac_code[on_off==1&modifyCluster==7&!is.na(modifyCluster)]))/length(unique(ac_code[on_off==1&!is.na(modifyCluster)]))
 ), by = labelBuildingHour]
 data.regress.total$time<-as.POSIXct(data.regress.total$time,format="%Y-%m-%d %H")
 
 ####行为聚类影响因素加入####
 #行为聚类的预处理
-raw.periodOn$labelDay<-paste(substr(raw.periodOn$ac_code,1,10),raw.periodOn$date,sep = "-")
-data.regress.behavior.raw<-melt(raw.periodOn[,-c("label","runtime","isWorkday")],id=c("labelDay","cluster","date","ac_code"))
-names(data.regress.behavior.raw)[6]<-"on_off"
-names(data.regress.behavior.raw)[5]<-"hour"
-data.regress.behavior.raw$hour<-as.character(data.regress.behavior.raw$hour)
-data.regress.behavior.raw$hour<-gsub("h","",data.regress.behavior.raw$hour)
-data.regress.behavior.raw$hour<-as.numeric(data.regress.behavior.raw$hour)
-data.regress.behavior.raw$hour<-data.regress.behavior.raw$hour+7
-data.regress.behavior.raw$labelBuildingHour<-paste(data.regress.behaviorCluster$labelDay,
-                                                   sprintf("%02d",data.regress.behaviorCluster$hour),sep = "-")
-data.regress.behavior.raw$modifyCluster<-data.regress.behavior.raw$cluster
-data.regress.behavior.raw[cluster==5|cluster==6]$modifyCluster<-2
-data.regress.behavior.raw[cluster==4]$modifyCluster<-3
-data.regress.behaviorCluster<-data.regress.behavior.raw[,.(
-  buildingCode=substr(ac_code[1],1,10),
-  date=date[1],
-  activeAcSum=length(ac_code),
-  onCount=sum(on_off),
-  activeAcRatio=sum(on_off)/length(ac_code),
-  c1Ratio=length(unique(ac_code[modifyCluster==1]))/length(unique(ac_code)),
-  c2Ratio=length(unique(ac_code[modifyCluster==2]))/length(unique(ac_code)),
-  c3Ratio=length(unique(ac_code[modifyCluster==3]))/length(unique(ac_code)),
-  c4Ratio=length(unique(ac_code[modifyCluster==4]))/length(unique(ac_code))
-),by=labelBuildingHour]
-
-ggplot(data=data.regress.total,aes(x=on_ratio,y=total_elec))+geom_point(aes(color=buildingCode))
+# raw.periodOn$labelDay<-paste(substr(raw.periodOn$ac_code,1,10),raw.periodOn$date,sep = "-")
+# data.regress.behavior.raw<-melt(raw.periodOn[,-c("label","runtime","isWorkday")],id=c("labelDay","cluster","date","ac_code"))
+# names(data.regress.behavior.raw)[6]<-"on_off"
+# names(data.regress.behavior.raw)[5]<-"hour"
+# data.regress.behavior.raw$hour<-as.character(data.regress.behavior.raw$hour)
+# data.regress.behavior.raw$hour<-gsub("h","",data.regress.behavior.raw$hour)
+# data.regress.behavior.raw$hour<-as.numeric(data.regress.behavior.raw$hour)
+# data.regress.behavior.raw$hour<-data.regress.behavior.raw$hour+7
+# data.regress.behavior.raw$labelBuildingHour<-paste(data.regress.behaviorCluster$labelDay,
+#                                                    sprintf("%02d",data.regress.behaviorCluster$hour),sep = "-")
+# data.regress.behavior.raw$modifyCluster<-data.regress.behavior.raw$cluster
+# data.regress.behavior.raw[cluster==5|cluster==6]$modifyCluster<-2
+# data.regress.behavior.raw[cluster==4]$modifyCluster<-3
+# data.regress.behaviorCluster<-data.regress.behavior.raw[,.(
+#   buildingCode=substr(ac_code[1],1,10),
+#   date=date[1],
+#   hour=hour[1],
+#   activeAcSum=length(unique(ac_code)),
+#   onCount=length(unique(ac_code[on_off==1])),
+#   activeAcRatio=sum(on_off)/length(ac_code),
+#   c1Ratio=length(unique(ac_code[modifyCluster==1]))/length(unique(ac_code)),
+#   c2Ratio=length(unique(ac_code[modifyCluster==2]))/length(unique(ac_code)),
+#   c3Ratio=length(unique(ac_code[modifyCluster==3]))/length(unique(ac_code)),
+#   c4Ratio=length(unique(ac_code[modifyCluster==7]))/length(unique(ac_code))
+# ),by=labelBuildingHour]
+# # nn<-data.table(data.regress.behaviorCluster$c1Ratio+data.regress.behaviorCluster$c2Ratio+
+# #                  data.regress.behaviorCluster$c3Ratio+data.regress.behaviorCluster$c4Ratio)
+# # rm(data.regress.behavior.raw)
+# 
+# ####行为聚类结果合并至预测数据####
+# data.regress.full.total<-merge(x=data.regress.total,y=data.regress.behaviorCluster[,c("labelBuildingHour","c1Ratio","c2Ratio","c3Ratio","c4Ratio")],all.x = TRUE,by = "labelBuildingHour")
+# data.regress.full.total$cFullOff<-0
+# data.regress.full.total$cFullOn<-0
+# data.regress.full.total[is.na(c1Ratio)]$cFullOff<-1
+# data.regress.full.total[cFullOff==1,c("c1Ratio","c2Ratio","c3Ratio","c4Ratio")]<-0
+# ggplot(data=data.regress.total,aes(x=on_ratio,y=total_elec))+geom_point(aes(color=buildingCode))
 
 rm(newdata)
 gc()
