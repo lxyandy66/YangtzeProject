@@ -51,11 +51,14 @@ ggplot(data = data.regress.raw[date=="2017-06-22"],aes(x=time))+geom_line(aes(y=
 # plot(data.regress.raw$total_elec,type="p")
 # lines(data.regress.raw$total_elec,type="l",col="red")
 
+####加入中间变量####
 data.regress.raw$deltaEC<-data.regress.raw$total_elec - data.regress.raw$time_sep
 data.regress.raw$ecHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw)-1)]$total_elec
 data.regress.raw$ecDayBefore<-data.regress.raw[c(1:24,1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$ecWeekBefore<-data.regress.raw[c(1:(24*7),1:nrow(data.regress.raw))]$total_elec
 data.regress.raw$deltaECHourBefore<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$deltaEC
+data.regress.raw$deltaEC2HourBefore<-data.regress.raw[c(1:2,1:nrow(data.regress.raw))]$deltaEC
+data.regress.raw$deltaECMean<-(data.regress.raw$deltaECHourBefore+data.regress.raw$deltaEC2HourBefore)/2
 data.regress.raw$c1Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c1Ratio
 data.regress.raw$c2Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c2Ratio
 data.regress.raw$c3Ratio<-data.regress.raw[c(1,1:nrow(data.regress.raw))]$c3Ratio
@@ -66,12 +69,13 @@ setorder(data.regress.raw,time)
 processStart<-1000#sample(1:(nrow(data.regress.raw)-24*7*2),1)#随机取起始点
 data.regress.process <- data.regress.raw[processStart:(processStart+24*7*2),
                        c("buildingCode","time","total_elec","temp_diff","temp_diffRatio","on_ratio","set_temp","real_temp","w_temp","w_hum","deltaInOutTemp",
-                         "time_sep","deltaEC","deltaECHourBefore","ecHourBefore","ecDayBefore","ecWeekBefore","estCoolingLoad",
+                         "time_sep","deltaEC","deltaECHourBefore","deltaEC2HourBefore","deltaECMean",
+                         "ecHourBefore","ecDayBefore","ecWeekBefore","estCoolingLoad",
                          "c1Ratio","c2Ratio","c3Ratio","c4Ratio","hour")]
 data.regress.process<-na.omit(data.regress.process)
-ggplot(data = data.regress.process,aes(x=time))+geom_line(aes(y=total_elec))+
-  geom_line(aes(y=time_sep,color="red"))+geom_line(aes(y=(sin((pi/12)*hour*10))))+
-  geom_line(aes(y=on_ratio*100,color="green"))+geom_line(aes(y=w_temp))+geom_line(aes(y=deltaInOutTemp,color="orange"))
+ggplot(data = data.regress.process,aes(x=time))+geom_line(aes(y=total_elec,color="total_elec"))+
+  geom_line(aes(y=time_sep,color="time_sep"))+geom_line(aes(y=(sin((pi/12)*hour*10)),color="timeSin"))+
+  geom_line(aes(y=on_ratio*100,color="on_ratio"))+geom_line(aes(y=w_temp,color="wTemp"))+geom_line(aes(y=deltaInOutTemp,color="deltaTemp"),show.legend = TRUE)
 
 
 ####将数据分为训练集和预测集####
@@ -104,7 +108,8 @@ regressFit<-lm(total_elec~time_sep+ecHourBefore+ecDayBefore+ecWeekBefore+
                  real_temp+
                  set_temp,data=data.regress.training)#未调整_多元线性回归
 regressFit<-plsr(total_elec~time_sep+ecWeekBefore+hour+
-                   on_ratio+temp_diff+temp_diffRatio+deltaECHourBefore+
+                   on_ratio+temp_diff+temp_diffRatio+
+                   deltaECMean+
                    w_temp+deltaInOutTemp+estCoolingLoad+
                    w_hum+
                    real_temp+set_temp+
@@ -184,16 +189,17 @@ summary(gvlma(regressFit))
 ####SVM回归####
 x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp","hour",
                                                "deltaInOutTemp","temp_diff","estCoolingLoad",
-                                               "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep",
+                                               "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
                                                "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
 x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp","hour",
                                        "deltaInOutTemp","temp_diff","estCoolingLoad",
-                                       "ecDayBefore","ecWeekBefore","deltaECHourBefore","ecHourBefore","time_sep",
+                                       "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
                                        "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 # regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
-regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=1024,cross=10)
+# regm<-ksvm(x.training,y.training,kernel="polydot",epsilon=0.0001,C=1024,cross=5)#type="eps-bsvr"
+regm<-ksvm(x.training,y.training,kernel="splinedot",type="eps-bsvr",epsilon=0.001,C=15,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
 #指标检验
