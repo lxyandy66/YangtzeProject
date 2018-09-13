@@ -199,7 +199,7 @@ x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp","
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 # regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
 # regm<-ksvm(x.training,y.training,kernel="polydot",epsilon=0.0001,C=1024,cross=5)#type="eps-bsvr"
-regm<-ksvm(x.training,y.training,kernel="splinedot",type="eps-bsvr",epsilon=0.001,C=15,cross=10)
+regm<-ksvm(x.training,y.training,kernel="polydot",type="eps-bsvr",epsilon=0.001,C=15,cross=10)
 training.predict<-data.table(predict(regm,x.training))
 test.predict<-data.table(predict(regm,x.test))
 #Ö¸±ê¼ìÑé
