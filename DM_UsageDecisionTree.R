@@ -71,13 +71,13 @@ data.behavior.tree.test<-data.behavior.tree.process[-sub]
 #######
 #####条件决策树
 ##树过大
-tr_ctree<-ctree(clusterDescribe~isWorkday+h8+h9+h10+h11+h12
-                +h13+h14+h15+h16+h17+h18
-                +h19+h20+h21+h22,data=data.behavior.tree.training)
-tr_ctree<-prune(tr_ctree,cp=0.0125)#怎么剪枝呢
-plot(tr_ctree)#可视化看不得，不适用
-ctree.predict<-predict(tr_ctree,data.behavior.tree.test)
-capture.output(confusionMatrix(table(ctree.predict,data.behavior.tree.test$clusterDescribe)),file = "ctree_evaluate.txt")
+# tr_ctree<-ctree(clusterDescribe~isWorkday+h8+h9+h10+h11+h12
+#                 +h13+h14+h15+h16+h17+h18
+#                 +h19+h20+h21+h22,data=data.behavior.tree.training)
+# tr_ctree<-prune(tr_ctree,cp=0.0125)#怎么剪枝呢
+# plot(tr_ctree)#可视化看不得，不适用
+# ctree.predict<-predict(tr_ctree,data.behavior.tree.test)
+# capture.output(confusionMatrix(table(ctree.predict,data.behavior.tree.test$clusterDescribe)),file = "ctree_evaluate.txt")
 # Accuracy : 0.9773          
 # 95% CI : (0.9745, 0.9798)
 # No Information Rate : 0.3702          
@@ -97,6 +97,7 @@ rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party"
 plot(rpartTrue2)
 
 rtree.predict<-predict(rpartTrue2,data.behavior.tree.test)
+confusionMatrix(table(rtree.predict,data.behavior.tree.test$clusterDescribe))
 capture.output(confusionMatrix(table(rtree.predict,data.behavior.tree.test$clusterDescribe)),file ="rtree_evaluate_bestCP.txt")
 #不剪枝 Accuracy : 0.8921 | 0.03剪枝后 Accuracy : 0.8225  | 最佳剪枝        
    

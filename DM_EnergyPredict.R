@@ -188,14 +188,18 @@ summary(gvlma(regressFit))
 
 ####SVM»Ø¹é####
 x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp","hour",
-                                               "deltaInOutTemp","temp_diff","estCoolingLoad",
+                                               "deltaInOutTemp","temp_diff","set_temp",
+                                               "estCoolingLoad",
                                                "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
-                                               "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
+                                               "c1Ratio","c2Ratio","c3Ratio","c4Ratio"
+                                               )])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
 x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp","hour",
-                                       "deltaInOutTemp","temp_diff","estCoolingLoad",
+                                       "deltaInOutTemp","temp_diff","set_temp",
+                                       "estCoolingLoad",
                                        "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
-                                       "c1Ratio","c2Ratio","c3Ratio","c4Ratio")])
+                                       "c1Ratio","c2Ratio","c3Ratio","c4Ratio"
+                                       )])
 y.test<-as.matrix(data.regress.test[,"total_elec"])
 # regm<-ksvm(x.training,y.training,epsilon=0.1,kernel="polydot",C=0.3,cross=10)
 # regm<-ksvm(x.training,y.training,kernel="polydot",epsilon=0.0001,C=1024,cross=5)#type="eps-bsvr"
@@ -208,6 +212,9 @@ getRSquare(test.predict$V1,y.test)
 getMAPE(training.predict$V1,y.training)
 getMAPE(test.predict$V1,y.test)
 regm
+# getRSquare(as.numeric(data.regress.training$time_sep),data.regress.training$total_elec)
+# getRSquare(as.numeric(data.regress.test$time_sep),data.regress.test$total_elec)
+
 
 par(mfrow=c(2,1))
 plot(y.training,type="o",main=paste(buildingSelect,"SVM-Training Set"))
@@ -216,6 +223,9 @@ lines(as.matrix(data.regress.training$time_sep),type="o",lty=2,col="blue")
 plot(y.test,type="o",main=paste(buildingSelect,"SVM-Test Set"))
 lines(test.predict$V1,type = "o",col="red")
 lines(as.matrix(data.regress.test$time_sep),type="o",lty=2,col="blue")
+
+write.csv(x=cbind(data.regress.training,training.predict),file = "training_full.csv")
+write.csv(x = cbind(data.regress.test,test.predict),file="test_full.csv")
 
 ggplot(data=data.regress.test[as.Date.character(data.regress.test$time)=="2017-06-22"],aes(x=time))+
   geom_line(aes(y=time_sep),color="red")+geom_line(aes(y=estCoolingLoad/30),color="blue")+geom_line(aes(y=real_temp),color="grey")+

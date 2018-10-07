@@ -157,25 +157,28 @@ rm(data_onLog)
 gc()
 
 
-#############聚类部分
+####聚类部分#########
 library(fpc)
 library(cluster)
 library(ggplot2)
 library(ggradar)
 library(knitr)
 
+data.behavior.full<-raw.periodOn
+
+raw.periodOn<-data.behavior.full[month(data.behavior.full$date) > 6 & month(data.behavior.full$date) <= 8]
 
 wssClusterEvaluate(data = raw.periodOn[, 5:19],
                    maxIter = 1000,
                    maxK = 15)
-pamkClusterEvaluate(data = raw.periodOn[, 5:19],
+pamkClusterEvaluate(data = raw.periodOn[, 5:19],criter ="ch",
                     startK = 2,
                     endK = 10)
 
 
 
 #实际聚类操作，k-medoids
-kSize <- 7
+kSize <- 8
 pamk.best <-
   pamk(
     raw.periodOn[, 5:19],
@@ -223,10 +226,9 @@ for (i in 1:kSize) {
 raw.meanRuntime<-raw.periodOn[,.(meanRuntime=mean(runtime)),by=cluster]
 setorder(raw.meanRuntime,cluster)
 write.csv(
-   data.table(
-     nn,raw.meanRuntime, cluster_count = pamk.best$pamobject$i.med,
-   pamk.best$pamobject$medoids,
-     pamk.best$pamobject$clusinfo
+   data.table( pamk.best$pamobject$clusinfo,
+     nn,raw.meanRuntime,
+   pamk.best$pamobject$medoids
    ),
    paste(kSize, "_cluster", ".csv")
  )
@@ -270,35 +272,24 @@ rm(postProcessData.Spring)
 rm(postProcessData.Winter)
 #这样比for循环快多了...
 
-#for (i in 1:nrow(postProcessData)) {
-#  if (postProcessData$month[i] <= 2) {
-#    postProcessData$season[i] = "Winter"
-#  } else if (postProcessData$month[i] <= 4) {
-#    postProcessData$season[i] = "Spring"
-#  } else if (postProcessData$month[i] <= 6) {
-#    postProcessData$season[i] = "Summer_warm"
-#  } else if (postProcessData$month[i] <= 8) {
-#    postProcessData$season[i] = "Summer"
-#  } else if (postProcessData$month[i] <= 10) {
-#    postProcessData$season[i] = "Autumn"
-#  } else if (postProcessData$month[i] <= 12) {
-#    postProcessData$season[i] = "Winter_warm"
-#  }
-#}
 
 postProcessData$clusterSeasonLabel <-
   paste(postProcessData$cluster, postProcessData$season,postProcessData$isWorkday, sep = "_")
 #clusterSeasonLabel：聚类_季节_是否为工作日
 
+postProcessData$seasonWorkdayLabel<-paste(postProcessData$season,postProcessData$isWorkday,sep = "_")
+#seasonWorkdayLabel：季节_是否为工作日
+
 ##聚类统计
 seasonSum <-
-  postProcessData[, .(sum = length(month), seasonInfo = unique(season)), by = season]#中间变量，计算各季节的总数
+  postProcessData[, .(sum = length(month), seasonInfo = unique(season)), by=seasonWorkdayLabel]#中间变量，区分季节中工作/非工作日
+                  #by = season]#中间变量，计算各季节工作日与非工作日的总数
 
 #按季节统计聚类
 clusterEvaluate <- postProcessData[, .(
   cluster = unique(cluster),
   season = unique(season),
-  count = length(season),
+  count = length(cluster),
   isWorkday=unique(isWorkday)
 ), by = clusterSeasonLabel]
 
@@ -306,7 +297,7 @@ clusterEvaluate <- postProcessData[, .(
 #计算各种聚类在不同季节所占百分比
 for (i in 1:nrow(clusterEvaluate)) {
   clusterEvaluate$ratio[i] =
-    clusterEvaluate$count[i] / seasonSum[seasonInfo == clusterEvaluate$season[i]]$sum
+    clusterEvaluate$count[i] / seasonSum[seasonWorkdayLabel == paste(clusterEvaluate$season[i],clusterEvaluate$isWorkday[i],sep = "_")]$sum
 }#有没有更简单的办法
 
 clusterMapping <- clusterEvaluate[, .(
@@ -322,6 +313,7 @@ write.csv(cbind(clusterEvaluate,clusterMapping),
           file = paste(kSize, "clusterEvaluate.csv", sep = "_"))
 
 
+####函数加载####
 
 ##  拐点法求最佳聚类数
 wssClusterEvaluate <- function(data,
@@ -341,10 +333,10 @@ wssClusterEvaluate <- function(data,
 }
 
 ##  分割算法求最佳聚类数，使用pamk方法
-pamkClusterEvaluate <- function(data, startK = 2, endK = 10) {
+pamkClusterEvaluate <- function(data, startK = 2, endK = 10,criter="ch") {
   pamk.best <-
     pamk(data,
-         usepam = FALSE,critout = TRUE,
+         usepam = FALSE,critout = TRUE,criterion = criter,
          krange = min(startK, endK):max(startK, endK))
   return(pamk.best)
 }
