@@ -166,7 +166,7 @@ library(knitr)
 
 data.behavior.full<-raw.periodOn
 
-raw.periodOn<-data.behavior.full[month(data.behavior.full$date) > 6 & month(data.behavior.full$date) <= 8]
+raw.periodOn<-data.behavior.full[month(data.behavior.full$date) > 2 & month(data.behavior.full$date) <= 4]
 
 wssClusterEvaluate(data = raw.periodOn[, 5:19],
                    maxIter = 1000,
@@ -178,6 +178,7 @@ pamkClusterEvaluate(data = raw.periodOn[, 5:19],criter ="ch",
 
 
 #实际聚类操作，k-medoids
+
 kSize <- 8
 pamk.best <-
   pamk(
@@ -300,6 +301,8 @@ for (i in 1:nrow(clusterEvaluate)) {
     clusterEvaluate$count[i] / seasonSum[seasonWorkdayLabel == paste(clusterEvaluate$season[i],clusterEvaluate$isWorkday[i],sep = "_")]$sum
 }#有没有更简单的办法
 
+clusterEvaluate$type<-paste(clusterEvaluate$cluster,clusterEvaluate$isWorkday,sep = "_")
+
 clusterMapping <- clusterEvaluate[, .(
   Spring = ratio[season == "Spring"],
   Summer_warm = ratio[season == "Summer_warm"],
@@ -307,7 +310,7 @@ clusterMapping <- clusterEvaluate[, .(
   Autumn = ratio[season == "Autumn"],
   Winter_warm = ratio[season == "Winter_warm"],
   Winter = ratio[season == "Winter"]
-), by = paste(cluster,isWorkday,sep = "_")]
+), by = type]
 
 write.csv(cbind(clusterEvaluate,clusterMapping),
           file = paste(kSize, "clusterEvaluate.csv", sep = "_"))
