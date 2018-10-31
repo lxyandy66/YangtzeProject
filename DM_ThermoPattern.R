@@ -6,6 +6,9 @@ library(ggradar)
 library(knitr)
 library(psych)
 library(plyr)
+library(timeDate)
+library(rJava)
+library(xlsx)
 library(rgl)
 
 ## 加载数据
@@ -139,15 +142,15 @@ data.raw.all <- data.raw.all[!duplicated(data.raw.all)]
 data.labelSelect <-
   data.raw.all[, .(num = length(temp)), by = labelDay]
 #这里要看一下不为30的数据有多少
+# data.err<-data.raw.all[labelDay %in% data.labelSelect[num != 30]$labelDay] #10565
 data.raw.all <-
   data.raw.all[labelDay %in% data.labelSelect[num == 30]$labelDay]
 rm(data.hznu.room)
 rm(data.zju.room)
+rm(data.err)
 
 
 ######设置日期标签，将数据变成一天的记录
-
-
 data.analyse.all <- data.raw.all[, .(
   date_time = paste(unique(year), unique(month), unique(day), sep = "-"),
   #小心这么弄出来是char啊
@@ -191,13 +194,13 @@ data.analyse.all$isWorkday <-
 
 
 #####开始聚类分析
-seasonSelect <- "Summer_warm"
+seasonSelect <- "Autumn"
 data.analyse.season <-
   data.analyse.all[season == seasonSelect, c(1, 5:35)]
 
-# wssClusterEvaluate(data.analyse.season)
-# pamkClusterEvaluate(data.analyse.season, startK = 2, endK = 15)
-for (i in c(3:7)) {
+wssClusterEvaluate(data.analyse.season[,2:31])
+ pamkClusterEvaluate(data.analyse.season[,2:31], startK = 2, endK = 10,criter = "multiasw")
+for (i in c(3:10)) {
   kSize <- i
   pamk.best <-
     pamk(
@@ -270,14 +273,14 @@ for (i in c(3:7)) {
     data.analyse.cluster$highHinge - data.analyse.cluster$lowHinge
   
   
-  write.csv(
+  write.xlsx(
     data.table(
       data.analyse.workday,
       data.analyse.cluster,
       cluster_count = pamk.best$pamobject$i.med,
       pamk.best$pamobject$clusinfo
     ),
-    paste(kSize, seasonSelect, "cluster.csv", sep = "_")
+    paste(kSize, seasonSelect, "cluster.xlsx", sep = "_")
   )
   ggsave(
     file = paste(kSize, seasonSelect, "cluster_meanTemp.png", sep = "_"),
