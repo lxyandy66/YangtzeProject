@@ -1,20 +1,56 @@
-#######分析教学建筑的空调使用模式的分析脚本
-
+####分析教学建筑的空调使用模式的分析脚本####
 library(data.table)
+library(fpc)
+library(cluster)
+library(ggplot2)
+library(ggradar)
+library(knitr)
+library(psych)
+library(plyr)
+library(timeDate)
+library(rJava)
+library(xlsx)
+
+
 load("2018-6-6.RData")
 
 setwd("/Users/Mr_Li/Downloads/R分析_改")
 
+####空调运行状态乱码对应####
+data.yx$state<-data.yx$run_mode
+# > unique(data.yx$run_mode)
+# [1] \271\330\273\372 \326\306\300\344 \306\344\313\373 \263\375\312\252 \313\315\267\347 \326\306\310\310
+# [7] \327\324\266\257
+stateCode<-array(c(as.vector(unique(data.yx$run_mode)),"off","cooling","other","dehum","venti","heating","auto"),dim = c(7,2))
+for(i in c(1:length(stateCode[,1]))){
+  data.yx[state==stateCode[i,1]]$state<-stateCode[i,2]
+}
+data.summary.state<-data.yx[,.(count=length(time)),by=state]#统计原始数据中各状态总数
+write.xlsx(x=data.summary.state,file = "使用模式统计.xlsx")
+#对不确定的运行状态进行定值
+data.yx$modiState<-data.yx$state
+data.yx[state=="dehum"]$modiState<-"cooling"
+#按典型月份对不确定空调状态进行处理
+data.yx[(month(time)>=5&month(time)<=10)&(modiState=="other"|modiState=="auto"|modiState=="venti")]$modiState<-"cooling"
+data.yx[(month(time)%in%c(11,12,1,2,3,4))&(modiState=="other"|modiState=="auto"|modiState=="venti")]$modiState<-"heating"
+
+####基本标签设定####
+#基本标签：空调编码_年月日小时分钟秒
+data.yx$baseLabel<-paste(data.yx$ac_code,data.yx$time,sep = "_")
+data.yd$baseLabel<-paste(data.yd$ac_code,data.yd$time,sep = "_")
+
 data.all <- data.yd#将用电数据作为实际运行模式的分析数据
+data.state<-na.omit(data.yx[,c("baseLabel","modiState")])
+data.state<-data.state[!duplicated(data.state$baseLabel)]#一定一定Key不要有重复才不会增加数据！！！
+data.all<-merge(x=data.all,y=data.state,all.x = TRUE,by.x = "baseLabel",by.y = "baseLabel")
 
 #重复10万多？？！
+data.all <- data.all[, c("ac_code", "time", "total_elec","modiState")]
 data.all <- data.all[!duplicated(data.all),]
-
-data.all <- data.all[, c("ac_code", "time", "total_elec")]
 #????
 
 
-###自己玉泉的数据加了还不如不加...
+###自己玉泉的数据加了还不如不加...不能加不能加不是不如不加！
 data.zju.consumption <-
   as.data.table(read.csv("/Users/Mr_Li/Desktop/新增_空调用电数据_玉1.csv"))
 data.zju.consumption <-
@@ -38,7 +74,7 @@ data.zju.distri <-
     onCount = sum(total_elec>=0.2),
     offCount = sum(total_elec < 0.2)
   ), by = hour]#仅用来统计分布
-data.all <- data.zju.consumption
+# data.all <- data.zju.consumption
 
 ##对时间进行处理
 data.all$year <- format(data.all$time, "%Y")
@@ -52,6 +88,8 @@ data.all$label <- paste(data.all$ac_code, data.all$date, sep = "-")#label=空调编
 
 #开关机情况处理
 #?????????为什么不可以直接用循环设置data.all的on_off值
+data.all[total_elec>=0.2&modiState=="off"]$modiState<-
+  ifelse(data.all[total_elec>=0.2&modiState=="off"]$month>=5&data.all[total_elec>=0.2&modiState=="off"]$month<=10,"cooling","heating")
 data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
 data_offLog <- data.all[total_elec < 0.2]
 data_onLog$on_off <- "1"
@@ -81,7 +119,8 @@ new.data.all1 <-
     month = month[1],
     day = day[1],
     label = unique(label),
-    hour = hour[1]
+    hour = hour[1],
+    # state=
   ), by = label1]
 #将半个小时的数据化为一个小时的数据
 

@@ -194,12 +194,12 @@ data.analyse.all$isWorkday <-
 
 
 #####开始聚类分析
-seasonSelect <- "Autumn"
+seasonSelect <- "Spring"
 data.analyse.season <-
   data.analyse.all[season == seasonSelect, c(1, 5:35)]
 
 wssClusterEvaluate(data.analyse.season[,2:31])
- pamkClusterEvaluate(data.analyse.season[,2:31], startK = 2, endK = 10,criter = "multiasw")
+pamkClusterEvaluate(data.analyse.season[,2:31], startK = 2, endK = 10,criter = "multiasw")
 for (i in c(3:10)) {
   kSize <- i
   pamk.best <-
@@ -244,12 +244,12 @@ for (i in c(3:10)) {
           y = value,
           color = cluster
         )
-      ) + geom_boxplot(outlier.colour = NA) + ylim(20, 35) + stat_summary(
+      ) + geom_boxplot(outlier.colour = NA) + ylim(10, 30) + stat_summary(
         fun.y = "mean",
         geom = "point",
         shape = 23
       ) + facet_wrap(~ cluster, nrow = kSize) + scale_x_discrete(breaks =
-                                                                   data.analyse.tempPlot[substr(variable, 5, 6) != "30"]$variable)
+                                              data.analyse.tempPlot[substr(variable, 5, 6) != "30"]$variable)
     )
   )
   ##逐半小时平均温度处理，统计各小时平均温度
@@ -291,7 +291,7 @@ for (i in c(3:10)) {
       ggplot(data.analyse.meanPlot, aes(
         x = hour, y = meanTemp, shape = cluster
       )) + geom_line(aes(color =
-                           cluster)) + geom_point(size = 5) + ylim(20, 35)
+                           cluster)) + geom_point(size = 5) + ylim(10, 30)
   )
 }
 
