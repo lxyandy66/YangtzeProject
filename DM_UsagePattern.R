@@ -17,36 +17,67 @@ load("2018-6-6.RData")
 setwd("/Users/Mr_Li/Downloads/R分析_改")
 
 ####空调运行状态乱码对应####
-data.yx$state<-data.yx$run_mode
+data.yx$state <- data.yx$run_mode
 # > unique(data.yx$run_mode)
 # [1] \271\330\273\372 \326\306\300\344 \306\344\313\373 \263\375\312\252 \313\315\267\347 \326\306\310\310
 # [7] \327\324\266\257
-stateCode<-array(c(as.vector(unique(data.yx$run_mode)),"off","cooling","other","dehum","venti","heating","auto"),dim = c(7,2))
-for(i in c(1:length(stateCode[,1]))){
-  data.yx[state==stateCode[i,1]]$state<-stateCode[i,2]
+stateCode <-
+  array(
+    c(
+      as.vector(unique(data.yx$run_mode)),
+      "off",
+      "cooling",
+      "other",
+      "dehum",
+      "venti",
+      "heating",
+      "auto"
+    ),
+    dim = c(7, 2)
+  )
+for (i in c(1:length(stateCode[, 1]))) {
+  data.yx[state == stateCode[i, 1]]$state <- stateCode[i, 2]
 }
-data.summary.state<-data.yx[,.(count=length(time)),by=state]#统计原始数据中各状态总数
-write.xlsx(x=data.summary.state,file = "使用模式统计.xlsx")
+
+####原始状态统计####
+data.summary.state <-
+  data.yx[, .(count = length(time)), by = state]#统计原始数据中各状态总数
+write.xlsx(x = data.summary.state, file = "使用模式统计.xlsx")
+
 #对不确定的运行状态进行定值
-data.yx$modiState<-data.yx$state
-data.yx[state=="dehum"]$modiState<-"cooling"
+data.yx$modiState <- data.yx$state
+data.yx[state == "dehum"]$modiState <- "cooling"
 #按典型月份对不确定空调状态进行处理
-data.yx[(month(time)>=5&month(time)<=10)&(modiState=="other"|modiState=="auto"|modiState=="venti")]$modiState<-"cooling"
-data.yx[(month(time)%in%c(11,12,1,2,3,4))&(modiState=="other"|modiState=="auto"|modiState=="venti")]$modiState<-"heating"
+data.yx[(month(time) >= 5 &
+           month(time) <= 10) &
+          (modiState == "other" |
+             modiState == "auto" | modiState == "venti")]$modiState <- "cooling"
+data.yx[(month(time) %in% c(11, 12, 1, 2, 3, 4)) &
+          (modiState == "other" |
+             modiState == "auto" | modiState == "venti")]$modiState <- "heating"
 
 ####基本标签设定####
 #基本标签：空调编码_年月日小时分钟秒
-data.yx$baseLabel<-paste(data.yx$ac_code,data.yx$time,sep = "_")
-data.yd$baseLabel<-paste(data.yd$ac_code,data.yd$time,sep = "_")
+data.yx$baseLabel <- paste(data.yx$ac_code, data.yx$time, sep = "_")
+data.yd$baseLabel <- paste(data.yd$ac_code, data.yd$time, sep = "_")
 
 data.all <- data.yd#将用电数据作为实际运行模式的分析数据
-data.state<-na.omit(data.yx[,c("baseLabel","modiState")])
-data.state<-data.state[!duplicated(data.state$baseLabel)]#一定一定Key不要有重复才不会增加数据！！！
-data.all<-merge(x=data.all,y=data.state,all.x = TRUE,by.x = "baseLabel",by.y = "baseLabel")
+data.state <- na.omit(data.yx[, c("baseLabel", "modiState")])
+data.state <-
+  data.state[!duplicated(data.state$baseLabel)]#一定一定Key不要有重复才不会增加数据！！！
+data.all <-
+  merge(
+    x = data.all,
+    y = data.state,
+    all.x = TRUE,
+    by.x = "baseLabel",
+    by.y = "baseLabel"
+  )
 
 #重复10万多？？！
-data.all <- data.all[, c("ac_code", "time", "total_elec","modiState")]
-data.all <- data.all[!duplicated(data.all),]
+data.all <-
+  data.all[, c("ac_code", "time", "total_elec", "modiState")]
+data.all <- data.all[!duplicated(data.all), ]
 #????
 
 
@@ -64,14 +95,14 @@ data.zju.consumption <-
   )
 data.zju.consumption$time <- as.POSIXct(data.zju.consumption$time)
 data.zju.consumption <-
-  data.zju.consumption[!duplicated(data.zju.consumption), ]
+  data.zju.consumption[!duplicated(data.zju.consumption),]
 data.all <- rbind(data.all, data.zju.consumption)
 
 data.zju.consumption$hour <- format(data.zju.consumption$time, "%H")
 data.zju.distri <-
   data.zju.consumption[, .(
     sum = length(total_elec),
-    onCount = sum(total_elec>=0.2),
+    onCount = sum(total_elec >= 0.2),
     offCount = sum(total_elec < 0.2)
   ), by = hour]#仅用来统计分布
 # data.all <- data.zju.consumption
@@ -84,12 +115,18 @@ data.all$hour <- format(data.all$time, "%H")
 data.all$date <-
   paste(data.all$year, data.all$month, data.all$day, sep = "-")
 #data.all <- data.all[year %in% c("2016", "2017")]#仅处理2016与2017年的数据
-data.all$label <- paste(data.all$ac_code, data.all$date, sep = "-")#label=空调编码-年-月-日
+data.all$label <-
+  paste(data.all$ac_code, data.all$date, sep = "-")#label=空调编码-年-月-日
 
 #开关机情况处理
-#?????????为什么不可以直接用循环设置data.all的on_off值
-data.all[total_elec>=0.2&modiState=="off"]$modiState<-
-  ifelse(data.all[total_elec>=0.2&modiState=="off"]$month>=5&data.all[total_elec>=0.2&modiState=="off"]$month<=10,"cooling","heating")
+#?????????为什么不可以直接用循环设置data.all的on_off值//其实也可以
+data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
+  ifelse(data.all[total_elec >= 0.2 &
+                    modiState == "off"]$month >= 5 &
+           data.all[total_elec >= 0.2 &
+                      modiState == "off"]$month <= 10, "cooling", "heating")
+#774条，直接舍去
+data.all[modiState=="off"]$total_elec<-0
 data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
 data_offLog <- data.all[total_elec < 0.2]
 data_onLog$on_off <- "1"
@@ -102,12 +139,15 @@ data.all$label1 <-
   paste(data.all$ac_code, data.all$date, data.all$hour, sep = "-")#label1 空调名-日期-小时
 data.all$on_off <- as.numeric(data.all$on_off)
 
+# nn<-data.all[modiState=="off"&on_off!=0] #这里没问题，此处提取出来为空
+
 all_on_off <-
   data.all[, .(runtime = sum(on_off)), by = ac_code]#对单台空调计算开关机情况
 acOn <- all_on_off[runtime >= 10]#将全年开机次数大于10次的算在有使用的记录中，阈值10次？？？
 new.data.all0 <- data.all[ac_code %in% acOn$ac_code]
-rm(data.all)
+# rm(data.all)
 
+new.data.all0$modiState <- as.character(new.data.all0$modiState)
 new.data.all1 <-
   new.data.all0[, .(
     ac_code = ac_code[1],
@@ -120,12 +160,12 @@ new.data.all1 <-
     day = day[1],
     label = unique(label),
     hour = hour[1],
-    # state=
+    state = ifelse(sum(on_off) == 0, "off", unique(modiState[on_off!=0]))#应该这么写unique(modiState[on_off!=0])
   ), by = label1]
 #将半个小时的数据化为一个小时的数据
 
 newdata_0 <- new.data.all1[on_off == 0]
-newdata_1 <- new.data.all1[on_off >= 1]
+newdata_1 <- new.data.all1[on_off >= 1]#emmm这里也没必要这么复杂
 newdata_1$on_off <- 1
 newdata <- rbind(newdata_0, newdata_1)
 newdata <- newdata[hour %in% c("08",
@@ -145,16 +185,19 @@ newdata <- newdata[hour %in% c("08",
                                "22")]#过滤只取8-22点的数据
 setorder(newdata, label, hour)
 newdata <- newdata[!duplicated(newdata)]
-rm(newdata.all1)
+# rm(new.data.all1)
 
 #筛选除去长度不为15（即8:00-22:00不完整的数据）
-data.labelSelect<-newdata[,.(num=length(on_off)),by=label]
-newdata<-newdata[label%in%data.labelSelect[num==15]$label]
+data.labelSelect <- newdata[, .(num = length(on_off)), by = label]
+newdata <- newdata[label %in% data.labelSelect[num == 15]$label]
 
+nn<-newdata[on_off!=0&state=="off"]
 raw.rawData <- newdata[, .(
   runtime = sum(on_off),
   date = unique(date),
   ac_code = unique(ac_code),
+  state = ifelse(sum(on_off) > 0, unique(state[on_off!=0]), "off"),#这里还是有问题，存在[state=="off"&runtime>0]
+  #这里有问题,会产生NA
   h1 = on_off[1],
   h2 = on_off[2],
   h3 = on_off[3],
@@ -172,10 +215,38 @@ raw.rawData <- newdata[, .(
   h15 = on_off[15]
 ), by = label]
 
+nn<-raw.rawData[state=="off"&runtime>0]#看看有没有未处理的情况
+
+####统计各个季节使用情况####
+raw.rawData$season <- "NULL"
+raw.rawData$month <- month(raw.rawData$date)
+raw.rawData[month <= 2]$season <- "Winter"
+raw.rawData[month > 2 & month <= 4]$season <- "Spring"
+raw.rawData[month > 4 & month <= 6]$season <- "Summer_warm"
+raw.rawData[month > 6 & month <= 8]$season <- "Summer"
+raw.rawData[month > 8 & month <= 10]$season <- "Autumn"
+raw.rawData[month > 10]$season <- "Winter_warm"
+
 
 raw.noneOn <- raw.rawData[runtime == 0]
 raw.fullOn <- raw.rawData[runtime == 15]
 raw.periodOn <- raw.rawData[runtime != 15 & runtime != 0]
+
+data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
+  sum = length(label),
+  useCount = length(label[runtime > 0]),
+  # useCountByState=length(label[state!="off"]),
+  noneUseCount = length(label[runtime == 0]),
+  # noneUseCountByState=length(label[state=="off"]),
+  heatingCount = length(label[state == "heating"]),
+  coolingCount = length(label[state == "cooling"])#heating+cooling!=use
+), by = season]
+data.summary.modeSeason$usingRatio <-
+  data.summary.modeSeason$useCount / data.summary.modeSeason$noneUseCount
+data.summary.modeSeason$heatingRatio <-
+  data.summary.modeSeason$heatingCount / data.summary.modeSeason$useCount
+data.summary.modeSeason$coolingRatio <-
+  data.summary.modeSeason$coolingCount / data.summary.modeSeason$useCount
 
 if (anyNA(raw.periodOn)) {
   raw.periodOn <- na.omit(raw.periodOn)
@@ -186,6 +257,9 @@ if (anyNA(raw.periodOn)) {
 # raw.periodOn.full <- raw.periodOn
 # raw.periodOn <-
 #   raw.periodOn[!ac_code %in% unique(data.zju.consumption$ac_code)]
+
+
+
 
 rm(newdata)
 rm(newdata_0)
@@ -203,16 +277,21 @@ library(ggplot2)
 library(ggradar)
 library(knitr)
 
-data.behavior.full<-raw.periodOn
+data.behavior.full <- raw.periodOn
 
-raw.periodOn<-data.behavior.full[month(data.behavior.full$date) > 2 & month(data.behavior.full$date) <= 4]
+raw.periodOn <-
+  data.behavior.full[month(data.behavior.full$date) > 2 &
+                       month(data.behavior.full$date) <= 4]
 
 wssClusterEvaluate(data = raw.periodOn[, 5:19],
                    maxIter = 1000,
                    maxK = 15)
-pamkClusterEvaluate(data = raw.periodOn[, 5:19],criter ="ch",
-                    startK = 2,
-                    endK = 10)
+pamkClusterEvaluate(
+  data = raw.periodOn[, 5:19],
+  criter = "ch",
+  startK = 2,
+  endK = 10
+)
 
 
 
@@ -235,7 +314,7 @@ raw.fullOn$cluster <- 4#全开作为第四类
 
 #工作日及非工作日的标签区分
 library(timeDate)
-raw.periodOn$isWorkday<-isWeekday(timeDate(raw.periodOn$date))
+raw.periodOn$isWorkday <- isWeekday(timeDate(raw.periodOn$date))
 
 ## 逐时开机概率进行处理，并输出到文件及绘图
 nn <- data.table()
@@ -263,15 +342,18 @@ for (i in 1:kSize) {
     )
 }
 #计算每一种开启模式的平均使用时长
-raw.meanRuntime<-raw.periodOn[,.(meanRuntime=mean(runtime)),by=cluster]
-setorder(raw.meanRuntime,cluster)
+raw.meanRuntime <-
+  raw.periodOn[, .(meanRuntime = mean(runtime)), by = cluster]
+setorder(raw.meanRuntime, cluster)
 write.csv(
-   data.table( pamk.best$pamobject$clusinfo,
-     nn,raw.meanRuntime,
-   pamk.best$pamobject$medoids
-   ),
-   paste(kSize, "_cluster", ".csv")
- )
+  data.table(
+    pamk.best$pamobject$clusinfo,
+    nn,
+    raw.meanRuntime,
+    pamk.best$pamobject$medoids
+  ),
+  paste(kSize, "_cluster", ".csv")
+)
 nn <- data.table(hour = (8:22), t(nn))
 dataPlot <- melt(nn, id.vars = "hour")
 ggplot(dataPlot, aes(x = hour, y = value, shape = variable)) + geom_line(aes(color =
@@ -280,7 +362,7 @@ ggplot(dataPlot, aes(x = hour, y = value, shape = variable)) + geom_line(aes(col
 ##加入季节标签
 postProcessData <-
   data.table(raw.periodOn, month = as.numeric(format(raw.periodOn$date, "%m")))
-
+#你这是在干啥....
 postProcessData.Winter <- postProcessData[month <= 2]
 postProcessData.Winter$season <- "Winter"
 postProcessData.Spring <- postProcessData[month > 2 & month <= 4]
@@ -314,33 +396,39 @@ rm(postProcessData.Winter)
 
 
 postProcessData$clusterSeasonLabel <-
-  paste(postProcessData$cluster, postProcessData$season,postProcessData$isWorkday, sep = "_")
+  paste(postProcessData$cluster,
+        postProcessData$season,
+        postProcessData$isWorkday,
+        sep = "_")
 #clusterSeasonLabel：聚类_季节_是否为工作日
 
-postProcessData$seasonWorkdayLabel<-paste(postProcessData$season,postProcessData$isWorkday,sep = "_")
+postProcessData$seasonWorkdayLabel <-
+  paste(postProcessData$season, postProcessData$isWorkday, sep = "_")
 #seasonWorkdayLabel：季节_是否为工作日
 
 ##聚类统计
 seasonSum <-
-  postProcessData[, .(sum = length(month), seasonInfo = unique(season)), by=seasonWorkdayLabel]#中间变量，区分季节中工作/非工作日
-                  #by = season]#中间变量，计算各季节工作日与非工作日的总数
+  postProcessData[, .(sum = length(month), seasonInfo = unique(season)), by =
+                    seasonWorkdayLabel]#中间变量，区分季节中工作/非工作日
+#by = season]#中间变量，计算各季节工作日与非工作日的总数
 
 #按季节统计聚类
 clusterEvaluate <- postProcessData[, .(
   cluster = unique(cluster),
   season = unique(season),
   count = length(cluster),
-  isWorkday=unique(isWorkday)
+  isWorkday = unique(isWorkday)
 ), by = clusterSeasonLabel]
 
 
 #计算各种聚类在不同季节所占百分比
 for (i in 1:nrow(clusterEvaluate)) {
   clusterEvaluate$ratio[i] =
-    clusterEvaluate$count[i] / seasonSum[seasonWorkdayLabel == paste(clusterEvaluate$season[i],clusterEvaluate$isWorkday[i],sep = "_")]$sum
+    clusterEvaluate$count[i] / seasonSum[seasonWorkdayLabel == paste(clusterEvaluate$season[i], clusterEvaluate$isWorkday[i], sep = "_")]$sum
 }#有没有更简单的办法
 
-clusterEvaluate$type<-paste(clusterEvaluate$cluster,clusterEvaluate$isWorkday,sep = "_")
+clusterEvaluate$type <-
+  paste(clusterEvaluate$cluster, clusterEvaluate$isWorkday, sep = "_")
 
 clusterMapping <- clusterEvaluate[, .(
   Spring = ratio[season == "Spring"],
@@ -351,8 +439,10 @@ clusterMapping <- clusterEvaluate[, .(
   Winter = ratio[season == "Winter"]
 ), by = type]
 
-write.csv(cbind(clusterEvaluate,clusterMapping),
-          file = paste(kSize, "clusterEvaluate.csv", sep = "_"))
+write.csv(
+  cbind(clusterEvaluate, clusterMapping),
+  file = paste(kSize, "clusterEvaluate.csv", sep = "_")
+)
 
 
 ####函数加载####
@@ -375,13 +465,21 @@ wssClusterEvaluate <- function(data,
 }
 
 ##  分割算法求最佳聚类数，使用pamk方法
-pamkClusterEvaluate <- function(data, startK = 2, endK = 10,criter="ch") {
-  pamk.best <-
-    pamk(data,
-         usepam = FALSE,critout = TRUE,criterion = criter,
-         krange = min(startK, endK):max(startK, endK))
-  return(pamk.best)
-}
+pamkClusterEvaluate <-
+  function(data,
+           startK = 2,
+           endK = 10,
+           criter = "ch") {
+    pamk.best <-
+      pamk(
+        data,
+        usepam = FALSE,
+        critout = TRUE,
+        criterion = criter,
+        krange = min(startK, endK):max(startK, endK)
+      )
+    return(pamk.best)
+  }
 
 #Calinsky标准
 # calinskyClusterEvaluate(data) {
