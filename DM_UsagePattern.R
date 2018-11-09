@@ -120,13 +120,14 @@ data.all$label <-
 
 #开关机情况处理
 #?????????为什么不可以直接用循环设置data.all的on_off值//其实也可以
-data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
-  ifelse(data.all[total_elec >= 0.2 &
-                    modiState == "off"]$month >= 5 &
-           data.all[total_elec >= 0.2 &
-                      modiState == "off"]$month <= 10, "cooling", "heating")
-#774条，直接舍去
+# data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
+#   ifelse(data.all[total_elec >= 0.2 &
+#                     modiState == "off"]$month >= 5 &
+#            data.all[total_elec >= 0.2 &
+#                       modiState == "off"]$month <= 10, "cooling", "heating")
+#能耗大于运行阈值但状态为关的共有774条，直接舍去
 data.all[modiState=="off"]$total_elec<-0
+
 data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
 data_offLog <- data.all[total_elec < 0.2]
 data_onLog$on_off <- "1"
@@ -239,14 +240,13 @@ data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
   noneUseCount = length(label[runtime == 0]),
   # noneUseCountByState=length(label[state=="off"]),
   heatingCount = length(label[state == "heating"]),
-  coolingCount = length(label[state == "cooling"])#heating+cooling!=use
+  coolingCount = length(label[state == "cooling"]),
+  otherCount=length(label[state=="other"]),
+  ventiCount=length(label[state=="venti"])
 ), by = season]
 data.summary.modeSeason$usingRatio <-
-  data.summary.modeSeason$useCount / data.summary.modeSeason$noneUseCount
-data.summary.modeSeason$heatingRatio <-
-  data.summary.modeSeason$heatingCount / data.summary.modeSeason$useCount
-data.summary.modeSeason$coolingRatio <-
-  data.summary.modeSeason$coolingCount / data.summary.modeSeason$useCount
+  data.summary.modeSeason$useCount / data.summary.modeSeason$sum
+
 
 if (anyNA(raw.periodOn)) {
   raw.periodOn <- na.omit(raw.periodOn)
