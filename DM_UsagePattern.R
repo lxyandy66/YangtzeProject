@@ -48,21 +48,23 @@ write.xlsx(x = data.summary.state, file = "使用模式统计.xlsx")
 data.yx$modiState <- data.yx$state
 data.yx[state == "dehum"]$modiState <- "cooling"
 #按典型月份对不确定空调状态进行处理
-data.yx[(month(time) >= 5 &
-           month(time) <= 10) &
-          (modiState == "other" |
-             modiState == "auto" | modiState == "venti")]$modiState <- "cooling"
-data.yx[(month(time) %in% c(11, 12, 1, 2, 3, 4)) &
-          (modiState == "other" |
-             modiState == "auto" | modiState == "venti")]$modiState <- "heating"
+# 这一部分先不做处理
+# data.yx[(month(time) >= 5 &
+#            month(time) <= 10) &
+#           (modiState == "other" |
+#              modiState == "auto" | modiState == "venti")]$modiState <- "cooling"
+# data.yx[(month(time) %in% c(11, 12, 1, 2, 3, 4)) &
+#           (modiState == "other" |
+#              modiState == "auto" | modiState == "venti")]$modiState <- "heating"
 
 ####基本标签设定####
 #基本标签：空调编码_年月日小时分钟秒
 data.yx$baseLabel <- paste(data.yx$ac_code, data.yx$time, sep = "_")
 data.yd$baseLabel <- paste(data.yd$ac_code, data.yd$time, sep = "_")
 
-data.all <- data.yd#将用电数据作为实际运行模式的分析数据
-data.state <- na.omit(data.yx[, c("baseLabel", "modiState")])
+data.all <- data.yd#将用电数据作为实际运行模式的基本分析数据
+####合并用电及室内环境数据集####
+data.state <- data.yx[, c("baseLabel", "modiState","set_temp","real_temp","state")]
 data.state <-
   data.state[!duplicated(data.state$baseLabel)]#一定一定Key不要有重复才不会增加数据！！！
 data.all <-
@@ -74,10 +76,14 @@ data.all <-
     by.y = "baseLabel"
   )
 
-#重复10万多？？！
-data.all <-
-  data.all[, c("ac_code", "time", "total_elec", "modiState")]
-data.all <- data.all[!duplicated(data.all), ]
+
+####还是保留完整的数据####
+# data.all <-
+#   data.all[, c("ac_code", "time", "total_elec", "modiState")]
+
+##此处可以直接倒入"HZNU_原始_能耗及热环境完整数据.rdata"
+
+data.all <- data.all[!duplicated(data.all), ]#重复10万多？？！
 #????
 
 
@@ -120,18 +126,18 @@ data.all$label <-
 
 #开关机情况处理
 #?????????为什么不可以直接用循环设置data.all的on_off值//其实也可以
-# data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
-#   ifelse(data.all[total_elec >= 0.2 &
-#                     modiState == "off"]$month >= 5 &
-#            data.all[total_elec >= 0.2 &
-#                       modiState == "off"]$month <= 10, "cooling", "heating")
-#能耗大于运行阈值但状态为关的共有774条，直接舍去
-data.all[modiState=="off"]$total_elec<-0
+data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
+  ifelse(data.all[total_elec >= 0.2 &
+                    modiState == "off"]$month >= 5 &
+           data.all[total_elec >= 0.2 &
+                      modiState == "off"]$month <= 10, "cooling", "heating")
+#还是不舍去了#能耗大于运行阈值但状态为关的共有774条，直接舍去
+# data.all[modiState=="off"]$total_elec<-0
 
 data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
 data_offLog <- data.all[total_elec < 0.2]
 data_onLog$on_off <- "1"
-data_offLog$on_off <- "0"
+data_offLog$on_off <- "0"##这里溢出，慢慢跑
 #.()为list()的一个别名。如果使用.(),返回的为一个data.table对象。如果不使用.()，结果为返回一个向量。
 
 data.all <- rbind(data_onLog, data_offLog)
@@ -169,6 +175,9 @@ newdata_0 <- new.data.all1[on_off == 0]
 newdata_1 <- new.data.all1[on_off >= 1]#emmm这里也没必要这么复杂
 newdata_1$on_off <- 1
 newdata <- rbind(newdata_0, newdata_1)
+rm(newdata_0)
+rm(newdata_1)
+gc()
 newdata <- newdata[hour %in% c("08",
                                "09",
                                "10",
@@ -193,12 +202,12 @@ data.labelSelect <- newdata[, .(num = length(on_off)), by = label]
 newdata <- newdata[label %in% data.labelSelect[num == 15]$label]
 
 nn<-newdata[on_off!=0&state=="off"]
+newdata$state1<-newdata$state#除了多一行还有没有直接在list里面操作的办法？？？
 raw.rawData <- newdata[, .(
   runtime = sum(on_off),
   date = unique(date),
   ac_code = unique(ac_code),
-  state = ifelse(sum(on_off) > 0, unique(state[on_off!=0]), "off"),#这里还是有问题，存在[state=="off"&runtime>0]
-  #这里有问题,会产生NA
+  state = getMode(state[state!="off"]),#emmmm
   h1 = on_off[1],
   h2 = on_off[2],
   h3 = on_off[3],
@@ -233,20 +242,28 @@ raw.noneOn <- raw.rawData[runtime == 0]
 raw.fullOn <- raw.rawData[runtime == 15]
 raw.periodOn <- raw.rawData[runtime != 15 & runtime != 0]
 
+raw.noneOn$state<-"off"
+
 data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
   sum = length(label),
   useCount = length(label[runtime > 0]),
-  # useCountByState=length(label[state!="off"]),
   noneUseCount = length(label[runtime == 0]),
-  # noneUseCountByState=length(label[state=="off"]),
   heatingCount = length(label[state == "heating"]),
   coolingCount = length(label[state == "cooling"]),
   otherCount=length(label[state=="other"]),
   ventiCount=length(label[state=="venti"])
-), by = season]
+), by = month]
 data.summary.modeSeason$usingRatio <-
   data.summary.modeSeason$useCount / data.summary.modeSeason$sum
+data.summary.modeSeason$season <- "NULL"
+data.summary.modeSeason[month <= 2]$season <- "Winter"
+data.summary.modeSeason[month > 2 & month <= 4]$season <- "Spring"
+data.summary.modeSeason[month > 4 & month <= 6]$season <- "Summer_warm"
+data.summary.modeSeason[month > 6 & month <= 8]$season <- "Summer"
+data.summary.modeSeason[month > 8 & month <= 10]$season <- "Autumn"
+data.summary.modeSeason[month > 10]$season <- "Winter_warm"
 
+write.xlsx(x=data.summary.modeSeason,file = "HZNU_行为_逐月使用及空调工况统计.xlsx")
 
 if (anyNA(raw.periodOn)) {
   raw.periodOn <- na.omit(raw.periodOn)
@@ -278,6 +295,8 @@ library(ggradar)
 library(knitr)
 
 data.behavior.full <- raw.periodOn
+
+####这一部分要按照modifyState判断####
 
 raw.periodOn <-
   data.behavior.full[month(data.behavior.full$date) > 2 &
@@ -447,6 +466,14 @@ write.csv(
 
 ####函数加载####
 
+####获取众数####
+getMode <- function(x) {
+  ux <- unique(x)
+  tab <- tabulate(match(x, ux))
+  ux[tab == max(tab)]
+}
+
+
 ##  拐点法求最佳聚类数
 wssClusterEvaluate <- function(data,
                                maxIter = 1000,
@@ -515,3 +542,4 @@ multiplyClusterEvaluate <- function(data) {
   )
 }
 # 错误: 矢量内存用完了(达到了极限?)，这个方法不行
+
