@@ -94,4 +94,6 @@ data.hznu.energy.room.day<-data.hznu.energy.ac.day[,.(roomCode=roomCode[1],
 # save(data.hznu.energy.room.day,data.hznu.energy.ac.hourly.pickup,
 #      file = "HZNU_能耗聚类预处理结果_仅工作时间.rdata")
 
+####将空调使用模式标签置于能耗数据集####
+data.hznu.energy.room.day$pattern<-"NULL"
 
