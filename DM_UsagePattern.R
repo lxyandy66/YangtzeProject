@@ -263,6 +263,14 @@ data.summary.modeSeason[month > 6 & month <= 8]$season <- "Summer"
 data.summary.modeSeason[month > 8 & month <= 10]$season <- "Autumn"
 data.summary.modeSeason[month > 10]$season <- "Winter_warm"
 
+####统计强行修正之后的状态####
+data.summary.modiState<-rbind(raw.noneOn, raw.periodOn[,c(1:25)])[,.(
+  useCount = length(label[runtime > 0]),
+  noneUseCount = length(label[runtime == 0]),
+  heatingCount = length(label[modiState == "heating"]),
+  coolingCount = length(label[modiState == "cooling"])
+),by=season]
+
 write.xlsx(x=data.summary.modeSeason,file = "HZNU_行为_逐月使用及空调工况统计.xlsx")
 
 if (anyNA(raw.periodOn)) {
