@@ -103,6 +103,8 @@ ecLim<-mean(data.hznu.predict[on_off==1]$total_elec)+1.96*sd(data.hznu.predict[o
 length(data.hznu.predict[total_elec>ecLim]$time)/length(data.hznu.predict[on_off==1]$time)
 #[1] 0.04784139
 
+
+#该方法效果不佳
 data.hznu.predict.modify<-data.hznu.predict[total_elec>ecLim]
 data.hznu.predict.modify$modifyElec<-ecLim+((data.hznu.predict.modify$total_elec-ecLim)/10)
 data.hznu.predict$modifyElec<- data.hznu.predict$total_elec

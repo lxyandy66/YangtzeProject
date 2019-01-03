@@ -13,7 +13,7 @@ library(xlsx)
 ####能耗聚类模式####
 #接能耗已处理清洗数据 data.hznu.predict
 
-# data.hznu.predict$date<-format(data.hznu.predict$time,"%Y-%m-%d")
+data.hznu.predict$date<-format(data.hznu.predict$time,"%Y-%m-%d")
 
 data.hznu.predict$labelRoomHour<-paste(data.hznu.predict$roomCode,data.hznu.predict$date,
                                        data.hznu.predict$hour,sep = "_")
@@ -39,8 +39,12 @@ data.hznu.energy.ac.hourly$hour<-as.numeric(format(data.hznu.energy.ac.hourly$ti
 data.hznu.energy.ac.hourly.pickup<-data.hznu.energy.ac.hourly[hour>=8&hour<=22]
 data.hznu.energy.checkComplete<-data.hznu.energy.ac.hourly.pickup[,.(
   ac_code=ac_code[1],count=length(ac_code)),by=labelAcDay]
+#按热环境清洗数据
 #记录小时  2      4      5      6      7      8      9     10     11     12     13     14     15 
 #条数     12     41      1    195     22    128    177     16     12      1     65     31 257905 
+#未清洗仅修正
+#记录小时 1      2      3      4      5      6      7      8      9     10     11     12     13     14     15 
+#条数 7     13      1     50      9    307     96    167    266     38     54      4    127     37 470656 
 data.hznu.energy.ac.hourly.pickup<-data.hznu.energy.ac.hourly.pickup[
   labelAcDay %in% data.hznu.energy.checkComplete[count==15]$labelAcDay]#剔除不完整的数据
 # rm(data.hznu.energy.ac.hourly)
@@ -91,9 +95,19 @@ data.hznu.energy.room.day<-data.hznu.energy.ac.day[,.(roomCode=roomCode[1],
                                                       h21=sum(h21),
                                                       h22=sum(h22)
                                                       ),by=labelRoomDay]
-# save(data.hznu.energy.room.day,data.hznu.energy.ac.hourly.pickup,
-#      file = "HZNU_能耗聚类预处理结果_仅工作时间.rdata")
 
-####将空调使用模式标签置于能耗数据集####
-data.hznu.energy.room.day$pattern<-"NULL"
+####增加基本使用模式标签####
+# basePattern={"noneUSe","periodUse","fullUse"}
+data.hznu.energy.room.day<-
+  merge(x=data.hznu.energy.room.day,y=data.hznu.use.room.day[,c("labelRoomDay","finalState","basePattern")],
+        by = "labelRoomDay",all.x = TRUE)
+data.hznu.energy.room.day[sumElec==0]$basePattern<-"noneUse"
+data.hznu.energy.room.day$zeroCount<-apply(data.hznu.energy.room.day[,c(6:20)],1,function(x){sum(x==0)})
+data.hznu.energy.room.day[is.na(basePattern)]$basePattern<-ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==15,"noneUse",
+                                                                  ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==0,"fullUse","periodUse"))
+nn<-data.hznu.energy.room.day[which(rowSums(is.na(data.hznu.energy.room.day))>0),]#行为finalState及basePattern缺失83781条
+
+# save(data.hznu.energy.room.day,data.hznu.energy.ac.hourly,
+#      file = "HZNU_能耗聚类预处理结果_仅工作时间_按原始修正能耗.rdata")
+
 

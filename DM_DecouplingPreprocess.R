@@ -129,7 +129,25 @@ data.hznu.thermo.room.day$labelRoomDay<-paste(data.hznu.thermo.room.day$room_cod
 rm(data.analyse.all)
 
 
-####最终为 房间小时 行为/温度/能耗 #####
+#### 最终为 房间小时 行为/温度/能耗 #####
+# 此处标签已统一，统一为labelRoomDay：房间号-年-月-日，如330100D251101_2017-03-27
+#将使用行为标签合并至热环境数据集
+data.hznu.thermo.room.day<-
+  merge(x=data.hznu.thermo.room.day,y=data.hznu.use.room.day[,c("labelRoomDay","finalState","basePattern")],
+        by = "labelRoomDay",all.x = TRUE)
+# nn<-data.hznu.thermo.room.day[which(rowSums(is.na(data.hznu.thermo.room.day))>0),]#行为finalState及basePattern缺失43236条
+
+data.hznu.energy.room.day<-
+  merge(x=data.hznu.energy.room.day,y=data.hznu.use.room.day[,c("labelRoomDay","basePattern")],
+        by = "labelRoomDay",all.x = TRUE)
+data.hznu.energy.room.day[sumElec==0]$basePattern<-"noneUse"
+data.hznu.energy.room.day$zeroCount<-apply(data.hznu.energy.room.day[,c(6:20)],1,function(x){sum(x==0)})
+data.hznu.energy.room.day[is.na(basePattern)]$basePattern<-ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==15,"noneUse",
+                                                                  ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==0,"fullUse","periodUse"))
+nn<-data.hznu.energy.room.day[which(rowSums(is.na(data.hznu.energy.room.day))>0),]#行为finalState及basePattern缺失39758条
+
+
+
 
 miningBehaviourPattern<-function(data,colRange,seasonCol){
   pamk.best<-pamk(data[,colRange],krange = getkSizeBySeason(unique(data[,seasonCol])[1]),criterion = "ch",
