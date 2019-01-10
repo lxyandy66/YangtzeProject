@@ -1,15 +1,5 @@
 ####分析教学建筑的空调使用模式的分析脚本####
-library(data.table)
-library(fpc)
-library(cluster)
-library(ggplot2)
-library(ggradar)
-library(knitr)
-library(psych)
-library(plyr)
-library(timeDate)
-library(rJava)
-library(xlsx)
+
 
 
 load("2018-6-6.RData")
@@ -178,21 +168,7 @@ newdata <- rbind(newdata_0, newdata_1)
 rm(newdata_0)
 rm(newdata_1)
 gc()
-newdata <- newdata[hour %in% c("08",
-                               "09",
-                               "10",
-                               "11",
-                               "12",
-                               "13",
-                               "14",
-                               "15",
-                               "16",
-                               "17",
-                               "18",
-                               "19",
-                               "20",
-                               "21",
-                               "22")]#过滤只取8-22点的数据
+newdata <- newdata[hour %in% sprintf("%02d",c(8:22))]#过滤只取8-22点的数据
 setorder(newdata, label, hour)
 newdata <- newdata[!duplicated(newdata)]
 # rm(new.data.all1)
@@ -230,12 +206,11 @@ nn<-raw.rawData[state=="off"&runtime>0]#看看有没有未处理的情况
 ####统计各个季节使用情况####
 raw.rawData$season <- "NULL"
 raw.rawData$month <- month(raw.rawData$date)
-raw.rawData[month <= 2]$season <- "Winter"
-raw.rawData[month > 2 & month <= 4]$season <- "Spring"
-raw.rawData[month > 4 & month <= 6]$season <- "Summer_warm"
-raw.rawData[month > 6 & month <= 8]$season <- "Summer"
-raw.rawData[month > 8 & month <= 10]$season <- "Autumn"
-raw.rawData[month > 10]$season <- "Winter_warm"
+raw.rawData$season <-lapply(raw.rawData$month,getSeason)
+
+###标记月旬####
+raw.rawData$monthPeriod<-paste(raw.rawData$month,lapply(
+ as.numeric(substr(raw.rawData$date,9,10)),getMonthPeriod),sep = "_")
 
 
 raw.noneOn <- raw.rawData[runtime == 0]
@@ -252,16 +227,10 @@ data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
   coolingCount = length(label[state == "cooling"]),
   otherCount=length(label[state=="other"]),
   ventiCount=length(label[state=="venti"])
-), by = month]
+), by = monthPeriod]
 data.summary.modeSeason$usingRatio <-
   data.summary.modeSeason$useCount / data.summary.modeSeason$sum
-data.summary.modeSeason$season <- "NULL"
-data.summary.modeSeason[month <= 2]$season <- "Winter"
-data.summary.modeSeason[month > 2 & month <= 4]$season <- "Spring"
-data.summary.modeSeason[month > 4 & month <= 6]$season <- "Summer_warm"
-data.summary.modeSeason[month > 6 & month <= 8]$season <- "Summer"
-data.summary.modeSeason[month > 8 & month <= 10]$season <- "Autumn"
-data.summary.modeSeason[month > 10]$season <- "Winter_warm"
+data.summary.modeSeason$season <- lapply(data.summary.modeSeason$month,getSeason)
 
 ####统计强行修正之后的状态####
 data.summary.modiState<-rbind(raw.noneOn, raw.periodOn[,c(1:25)])[,.(
@@ -296,11 +265,7 @@ gc()
 
 
 ####聚类部分#########
-library(fpc)
-library(cluster)
-library(ggplot2)
-library(ggradar)
-library(knitr)
+
 
 data.behavior.full <- raw.periodOn
 
@@ -340,7 +305,6 @@ raw.periodOn$date <- as.Date(raw.periodOn$date)
 raw.fullOn$cluster <- 4#全开作为第四类
 
 #工作日及非工作日的标签区分
-library(timeDate)
 raw.periodOn$isWorkday <- isWeekday(timeDate(raw.periodOn$date))
 
 ## 逐时开机概率进行处理，并输出到文件及绘图
@@ -390,37 +354,7 @@ ggplot(dataPlot, aes(x = hour, y = value, shape = variable)) + geom_line(aes(col
 postProcessData <-
   data.table(raw.periodOn, month = as.numeric(format(raw.periodOn$date, "%m")))
 #你这是在干啥....
-postProcessData.Winter <- postProcessData[month <= 2]
-postProcessData.Winter$season <- "Winter"
-postProcessData.Spring <- postProcessData[month > 2 & month <= 4]
-postProcessData.Spring$season <- "Spring"
-postProcessData.Summer_warm <-
-  postProcessData[month > 4 & month <= 6]
-postProcessData.Summer_warm$season <- "Summer_warm"
-postProcessData.Summer <- postProcessData[month > 6 & month <= 8]
-postProcessData.Summer$season <- "Summer"
-postProcessData.Autumn <- postProcessData[month > 8 & month <= 10]
-postProcessData.Autumn$season <- "Autumn"
-postProcessData.Winter_warm <- postProcessData[month > 10 &
-                                                 month <= 12]
-postProcessData.Winter_warm$season <- "Winter_warm"
-postProcessData <-
-  rbind(
-    postProcessData.Spring,
-    postProcessData.Summer_warm,
-    postProcessData.Summer,
-    postProcessData.Autumn,
-    postProcessData.Winter_warm,
-    postProcessData.Winter
-  )
-rm(postProcessData.Autumn)
-rm(postProcessData.Summer)
-rm(postProcessData.Summer_warm)
-rm(postProcessData.Winter_warm)
-rm(postProcessData.Spring)
-rm(postProcessData.Winter)
-#这样比for循环快多了...
-
+postProcessData$season<-lapply(postProcessData$month,getSeason)
 
 postProcessData$clusterSeasonLabel <-
   paste(postProcessData$cluster,
@@ -470,84 +404,4 @@ write.csv(
   cbind(clusterEvaluate, clusterMapping),
   file = paste(kSize, "clusterEvaluate.csv", sep = "_")
 )
-
-
-####函数加载####
-
-####获取众数####
-getMode <- function(x) {
-  ux <- unique(x)
-  tab <- tabulate(match(x, ux))
-  ux[tab == max(tab)]
-}
-
-
-##  拐点法求最佳聚类数
-wssClusterEvaluate <- function(data,
-                               maxIter = 1000,
-                               maxK = 20) {
-  wss <-
-    (nrow(data) - 1) * sum(apply(data, 2, var))
-  for (i in 1:maxK)
-    wss[i] <-
-      sum(kmeans(data, centers = i, iter.max = maxIter)$withinss)
-  plot(1:maxK,
-       wss,
-       type = "o",
-       xlab = "Number of Clusters",
-       ylab = "Within groups sum of squares")
-  return(wss)
-}
-
-##  分割算法求最佳聚类数，使用pamk方法
-pamkClusterEvaluate <-
-  function(data,
-           startK = 2,
-           endK = 10,
-           criter = "ch") {
-    pamk.best <-
-      pamk(
-        data,
-        usepam = FALSE,
-        critout = TRUE,
-        criterion = criter,
-        krange = min(startK, endK):max(startK, endK)
-      )
-    return(pamk.best)
-  }
-
-#Calinsky标准
-# calinskyClusterEvaluate(data) {
-#   require(vegan)
-#   fit <-
-#     cascadeKM(scale(calinsky, center = TRUE,  scale = TRUE),
-#               1,
-#               10,
-#               iter = 1000)
-#   plot(fit, sortg = TRUE, grpmts.plot = TRUE)
-#   calinski.best <- as.numeric(which.max(fit$results[2,]))
-#   cat("Calinski criterion optimal number of clusters:",
-#       calinski.best,
-#       "\n")
-# }
-#Gap Statistic
-gapClusterEvaluate <- function(data, kMax = 15, b = 10) {
-  library(cluster)
-  gap_cluster <-
-    clusGap(data, kmeans, K.max = kMax, B = b)
-  fviz_gap_stat(gap_cluster)
-}
-#多指标法
-multiplyClusterEvaluate <- function(data) {
-  library(factoextra)
-  library(ggplot2)
-  fviz_nbclust(
-    data,
-    kmeans,
-    method = "silhouette",
-    k.max = 15,
-    diss = dist(data, method = "binary")
-  )
-}
-# 错误: 矢量内存用完了(达到了极限?)，这个方法不行
 

@@ -57,29 +57,9 @@ data.zju.thermo.rawProcess$label <-
   )
 
 ##增加季节标签
-data.hznu.final$season <- "NULL"
-data.hznu.final[month == "01" | month == "02"]$season <- "Winter"
-data.hznu.final[month == "03" | month == "04"]$season <- "Spring"
-data.hznu.final[month == "05" |
-                  month == "06"]$season <- "Summer_warm"
-data.hznu.final[month == "07" | month == "08"]$season <- "Summer"
-data.hznu.final[month == "09" | month == "10"]$season <- "Autumn"
-data.hznu.final[month == "11" |
-                  month == "12"]$season <- "Winter_warm"
+data.hznu.final$season <- lapply(data.hnzu.final$month,getSeason)
 
-data.zju.thermo.rawProcess$season <- "NULL"
-data.zju.thermo.rawProcess[month == "01" |
-                             month == "02"]$season <- "Winter"
-data.zju.thermo.rawProcess[month == "03" |
-                             month == "04"]$season <- "Spring"
-data.zju.thermo.rawProcess[month == "05" |
-                             month == "06"]$season <- "Summer_warm"
-data.zju.thermo.rawProcess[month == "07" |
-                             month == "08"]$season <- "Summer"
-data.zju.thermo.rawProcess[month == "09" |
-                             month == "10"]$season <- "Autumn"
-data.zju.thermo.rawProcess[month == "11" |
-                             month == "12"]$season <- "Winter_warm"
+data.zju.thermo.rawProcess$season <- lapply(data.zju.thermo.rawProcess$month,getSeason)
 
 ###按季节把各月单独提取，否则太慢了
 ###先将数据按房间及半小时汇总
@@ -114,21 +94,7 @@ data.zju.room$date_time <- as.POSIXct(data.zju.room$date_time)
 
 ###将所有数据合并
 data.raw.all <-
-  rbind(data.zju.room, data.hznu.room)[hour %in% c("08",
-                                                   "09",
-                                                   "10",
-                                                   "11",
-                                                   "12",
-                                                   "13",
-                                                   "14",
-                                                   "15",
-                                                   "16",
-                                                   "17",
-                                                   "18",
-                                                   "19",
-                                                   "20",
-                                                   "21",
-                                                   "22")]
+  rbind(data.zju.room, data.hznu.room)[hour %in% sprintf("%02d",c(8:22))]
 data.raw.all$labelDay <-
   paste(
     data.raw.all$room_code,

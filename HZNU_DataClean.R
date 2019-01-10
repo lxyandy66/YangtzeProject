@@ -95,19 +95,7 @@ data.running.checkDay <-
   data.running.checkDay[sd > 0.05]#单天逐时温度方差大于10全部过滤
 
 ##按季节对应温度过滤
-data.running.checkDay$season <- "NULL"
-data.running.checkDay[month == "01" | month == "02"]$season <-
-  "Winter"
-data.running.checkDay[month == "03" | month == "04"]$season <-
-  "Spring"
-data.running.checkDay[month == "05" |
-                        month == "06"]$season <- "Summer_warm"
-data.running.checkDay[month == "07" | month == "08"]$season <-
-  "Summer"
-data.running.checkDay[month == "09" |
-                        month == "10"]$season <- "Autumn"
-data.running.checkDay[month == "11" |
-                        month == "12"]$season <- "Winter_warm"
+data.running.checkDay$season <-lapply(data.running.checkDay$month,getSeason)
 #checkDay 功德圆满
 
 data.running.checkSeason <-
