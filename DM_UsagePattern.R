@@ -204,12 +204,11 @@ raw.rawData <- newdata[, .(
 nn<-raw.rawData[state=="off"&runtime>0]#看看有没有未处理的情况
 
 ####统计各个季节使用情况####
-raw.rawData$season <- "NULL"
 raw.rawData$month <- month(raw.rawData$date)
-raw.rawData$season <-lapply(raw.rawData$month,getSeason)
+raw.rawData$season <-sapply(raw.rawData$month,getSeason,simplify = TRUE)
 
 ###标记月旬####
-raw.rawData$monthPeriod<-paste(raw.rawData$month,lapply(
+raw.rawData$monthPeriod<-paste(raw.rawData$month,sapply(simplify=TRUE,
  as.numeric(substr(raw.rawData$date,9,10)),getMonthPeriod),sep = "_")
 
 
@@ -230,14 +229,15 @@ data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
 ), by = monthPeriod]
 data.summary.modeSeason$usingRatio <-
   data.summary.modeSeason$useCount / data.summary.modeSeason$sum
-data.summary.modeSeason$season <- lapply(data.summary.modeSeason$month,getSeason)
+data.summary.modeSeason$season <- sapply(data.summary.modeSeason$month,getSeason,simplify = TRUE)
 
 ####统计强行修正之后的状态####
-data.summary.modiState<-rbind(raw.noneOn, raw.periodOn[,c(1:25)])[,.(
+data.summary.modiState<-as.data.table(rbind(raw.noneOn, raw.periodOn))[,.(
   useCount = length(label[runtime > 0]),
   noneUseCount = length(label[runtime == 0]),
   heatingCount = length(label[modiState == "heating"]),
-  coolingCount = length(label[modiState == "cooling"])
+  coolingCount = length(label[modiState == "cooling"]),
+  monthContent=paste(unique(month),sep = "、")
 ),by=season]
 
 write.xlsx(x=data.summary.modeSeason,file = "HZNU_行为_逐月使用及空调工况统计.xlsx")
@@ -353,8 +353,8 @@ ggplot(dataPlot, aes(x = hour, y = value, shape = variable)) + geom_line(aes(col
 ##加入季节标签
 postProcessData <-
   data.table(raw.periodOn, month = as.numeric(format(raw.periodOn$date, "%m")))
-#你这是在干啥....
-postProcessData$season<-lapply(postProcessData$month,getSeason)
+
+postProcessData$season<-sapply(postProcessData$month,getSeason,simplify = TRUE)
 
 postProcessData$clusterSeasonLabel <-
   paste(postProcessData$cluster,

@@ -54,8 +54,14 @@ raw.rawData[runtime == 0]$pattern<-"noneUse"
 raw.rawData[runtime == 15]$pattern<-"fullUse"
 raw.rawData[runtime != 15 & runtime != 0]$pattern<-"periodUse"
 
+####异常数据的去除####
+#如夏季制热冬季制冷
+raw.rawData$removeFlag<-FALSE
+raw.rawData[(season=="Summer"|season=="Summer_warm")&finalState=="heating"]$removeFlag<-TRUE
+raw.rawData[(season=="Winter"|season=="Winter_warm")&finalState=="cooling"]$removeFlag<-TRUE
+
 ####空调使用记录转为日内房间级使用记录####
-data.hznu.use.room.day<-raw.rawData[,.(date=date[1],
+data.hznu.use.room.day<-raw.rawData[removeFlag==FALSE,.(date=date[1],
                                        roomCode=roomCode[1],
                                        acCount=length(unique(ac_code)),
                                        finalState=ifelse(length(finalState[finalState!="off"])==0,"off",
@@ -81,22 +87,50 @@ data.hznu.use.room.day<-raw.rawData[,.(date=date[1],
 data.hznu.use.room.day$runtime<-apply(data.hznu.use.room.day[,c(7:21)],1,sum)#计算总使用时间
 data.hznu.use.room.day$basePattern<-ifelse(data.hznu.use.room.day$runtime==0,"noneUse",
                                            ifelse(data.hznu.use.room.day$runtime==15,"fullUse","periodUse"))
+data.hznu.use.room.day$month<-substr(data.hznu.use.room.day$date,6,7)
+summary.room.finalUse<-data.hznu.use.room.day[,.(
+  useCount = length(labelRoomDay[runtime > 0]),
+  noneUseCount = length(labelRoomDay[runtime == 0]),
+  heatingCount = length(labelRoomDay[finalState == "heating"]),
+  coolingCount = length(labelRoomDay[finalState == "cooling"]),
+  modiSeason=season[1]
+),by=month]
 
+#将春秋季合并为过渡季
+data.hznu.use.room.day$modiSeason<-data.hznu.use.room.day$season
+data.hznu.use.room.day[modiSeason=="Spring"|modiSeason=="Autumn"]$modiSeason<-"Transition"
+data.hznu.use.room.day.period<-data.hznu.use.room.day[runtime>0&runtime<15]
 
 #?????需要确定聚类的分类，不同工况分开聚？不同季节分开聚？????
-raw.periodOn$splitFactor<-paste(raw.periodOn$season,raw.periodOn$finalState,sep = "_")
-list.behaviour.season<-split(raw.periodOn,as.factor(raw.periodOn$splitFactor))
-# mapply(FUN = miningBehaviourPattern,list(data=list.behaviour.season,colRange=c(6:20),seasonCol=22))
-# mapply(FUN = miningBehaviourPattern,list.behaviour.season,6:20,22)
-#mapply有没有什么好方法，传参不对
-
-
-for(s in unique(raw.periodOn$season)){
-  raw.periodOn[season==s]$pattern<-pamk(raw.periodOn[season==s,6:20],
-                                        krange = getkSizeBySeason(s),criterion = "ch",usepam = FALSE,critout = TRUE)
-}
-
-
+list.hznu.room.use<-split(data.hznu.use.room.day.period,
+                          f=as.factor(paste(data.hznu.use.room.day.period$finalState,
+                                            data.hznu.use.room.day.period$modiSeason,sep = "_")))
+####行为再聚类####
+####试聚类####
+#聚类评估
+modeSelect<-"cooling_Summer"
+data.use.room.tryCluster<-list.hznu.room.use[[modeSelect]]
+wssClusterEvaluate(data = data.use.room.tryCluster[, 7:22],
+                   maxIter = 1000,
+                   maxK = 15)
+pamkClusterEvaluate(
+  data = data.use.room.tryCluster[, 7:22],#8-22时+runtime
+  criter = "multiasw",
+  startK = 2,
+  endK = 10
+)
+#试聚类
+kSize <- 3
+pamk.best <-
+  pamk(
+    data.use.room.tryCluster[, 7:22],
+    krange = kSize,
+    criterion = "ch",
+    usepam = FALSE,
+    critout = TRUE
+  )#注意有缺失值的聚类结果将会是NA
+data.use.room.tryCluster$cluster<-pamk.best$pamobject$clustering
+summary.use.
 
 # list.behaviour.season 数据行为模式聚类已标记，全年模式统一
 
