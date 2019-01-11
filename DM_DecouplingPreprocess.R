@@ -130,8 +130,27 @@ pamk.best <-
     critout = TRUE
   )#注意有缺失值的聚类结果将会是NA
 data.use.room.tryCluster$cluster<-pamk.best$pamobject$clustering
-summary.use.
-
+summary.use.room.cluster<-data.use.room.tryCluster[,.(
+  count=length(labelRoomDay),
+  runtime=mean(runtime),
+  h8=mean(h8),
+  h9=mean(h9),
+  h10=mean(h10),
+  h11=mean(h11),
+  h12=mean(h12),
+  h13=mean(h13),
+  h14=mean(h14),
+  h15=mean(h15),
+  h16=mean(h16),
+  h17=mean(h17),
+  h18=mean(h18),
+  h19=mean(h19),
+  h20=mean(h20),
+  h21=mean(h21),
+  h22=mean(h22)
+),by=cluster]
+summary.use.plot.cluster<-melt(summary.use.room.cluster)
+ggplot(data=summary.use.room.cluster,aes)
 # list.behaviour.season 数据行为模式聚类已标记，全年模式统一
 
 
