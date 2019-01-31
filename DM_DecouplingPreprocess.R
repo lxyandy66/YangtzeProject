@@ -108,21 +108,22 @@ list.hznu.room.use<-split(data.hznu.use.room.day.period,
 ####行为再聚类####
 ####试聚类####
 #聚类评估
-modeSelect<-"cooling_Summer"
+modeSelect<-"cooling_Transition"
 data.use.room.tryCluster<-list.hznu.room.use[[modeSelect]]
+
 wssClusterEvaluate(data = data.use.room.tryCluster[, 7:22],
                    maxIter = 1000,
                    maxK = 15)
 pamkClusterEvaluate(
   data = data.use.room.tryCluster[, 7:22],#8-22时+runtime
-  criter = "multiasw",
-  startK = 2,
+  criter = "ch",
+  startK = 1,
   endK = 10
 )
 #试聚类
 kSize <- 3
-pamk.best <-
-  pamk(
+for(kSize in c(3:9)){
+  pamk.best <-pamk(
     data.use.room.tryCluster[, 7:22],
     krange = kSize,
     criterion = "ch",
@@ -130,9 +131,12 @@ pamk.best <-
     critout = TRUE
   )#注意有缺失值的聚类结果将会是NA
 data.use.room.tryCluster$cluster<-pamk.best$pamobject$clustering
-summary.use.room.cluster<-data.use.room.tryCluster[,.(
-  count=length(labelRoomDay),
+data.use.room.tryCluster$isWorkday<-isWeekday(data.use.room.tryCluster$date)
+stat.use.room.cluster<-data.use.room.tryCluster[,.(
   runtime=mean(runtime),
+  count=length(labelRoomDay),
+  workdayRatio=length(labelRoomDay[isWorkday==TRUE]),
+  weekendRatio=length(labelRoomDay[isWorkday==FALSE]),
   h8=mean(h8),
   h9=mean(h9),
   h10=mean(h10),
@@ -149,10 +153,45 @@ summary.use.room.cluster<-data.use.room.tryCluster[,.(
   h21=mean(h21),
   h22=mean(h22)
 ),by=cluster]
-summary.use.plot.cluster<-melt(summary.use.room.cluster)
-ggplot(data=summary.use.room.cluster,aes)
-# list.behaviour.season 数据行为模式聚类已标记，全年模式统一
+setorder(stat.use.room.cluster,cluster)
+write.xlsx(data.table(stat.use.room.cluster,pamk.best$pamobject$clusinfo,
+                      pamk.best$pamobject$medoids),file = paste(modeSelect,kSize, "cluster_usage_stat.xlsx",sep = "_"))
+stat.use.plot.cluster<-data.table(hour=(8:22),t(stat.use.room.cluster[,c(6:20)]))
+stat.use.plot.cluster<-melt(stat.use.plot.cluster,id.vars ="hour")
+ggsave(
+  file = paste(modeSelect,kSize, "cluster.png", sep = "_"),
+  height = 9,
+  width = 16,
+  dpi = 120,
+  plot =
+    ggplot(data=stat.use.plot.cluster,aes(x=hour,y=value,color=variable,shape=variable))+geom_line()+geom_point()
+)
+}
 
+
+# list.behaviour.season 数据行为模式聚类已标记，全年模式统一
+####正式聚类####
+#根据试聚类的聚类数统一对6个季节进行聚类
+for(i in names(list.hznu.room.use)){
+  list.hznu.room.use[[i]]$cluster<-pamk(
+    list.hznu.room.use[[i]][,7:21],
+    krange = getkSizeBySeason(i),
+    criterion = "ch",
+    usepam = FALSE,
+    critout = TRUE
+  )$pamobject$clustering
+  # list.hznu.room.use[[i]]$clusterName<-mapply(getUsePatternName,i,list.hznu.room.use[[i]]$cluster)
+  
+  #根据各季节聚类对应编码转换为统一名称
+  list.hznu.room.use[[i]]$clusterName<-NULL
+  list.hznu.room.use[[i]]$clusterName<-""
+  for(j in unique(list.hznu.room.use[[i]]$cluster)){
+    list.hznu.room.use[[i]][cluster==j,]$clusterName<-as.character(getUsePatternName(season= i,clusterNo = j))
+  }
+}#其实用lapply更好
+
+View(list.hznu.room.use[[i]])
+data.hznu.use.seasonMap<-as.data.table(read.xlsx2(file = "HZNU_ClusterMapping.xlsx",sheetIndex = 1))
 
 
 ####热环境预处理数据处理####
@@ -208,7 +247,11 @@ miningBehaviourPattern<-function(data,colRange,seasonCol){
 }
 
 getkSizeBySeason<-function(season){
-  kSizeBySeason<-array(c("Spring","Summer_warm","Summer","Autumn","Winter_warm","Winter",
-                         6,6,4,4,5,3,6),dim = c(6,2))
-  return(kSizeBySeason[season,2])
+  kSizeBySeason<-data.table(seasonMode=c("cooling_Summer","cooling_Summer_warm","cooling_Transition","heating_Transition",
+                         "heating_Winter","heating_Winter_warm"),
+                         kSize=c(3,5,4,3,3,5))
+  return(kSizeBySeason[seasonMode==season,2])
+}
+getUsePatternName<-function(season,clusterNo){
+  return(data.hznu.use.seasonMap[seasonMode==season & patternCode==clusterNo]$patternName)#参数名不要和变量名一样
 }

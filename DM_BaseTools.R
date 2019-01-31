@@ -10,6 +10,14 @@ library(plyr)
 library(timeDate)
 library(rJava)
 library(xlsx)
+library(reshape2)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(caret)
+library(rattle)
+library(pROC)
 
 ####预处理部分####
 getMode <- function(x) {
