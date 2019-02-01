@@ -108,7 +108,7 @@ list.hznu.room.use<-split(data.hznu.use.room.day.period,
 ####行为再聚类####
 ####试聚类####
 #聚类评估
-modeSelect<-"cooling_Transition"
+modeSelect<-"cooling_Summer_warm"
 data.use.room.tryCluster<-list.hznu.room.use[[modeSelect]]
 
 wssClusterEvaluate(data = data.use.room.tryCluster[, 7:22],
@@ -121,7 +121,7 @@ pamkClusterEvaluate(
   endK = 10
 )
 #试聚类
-kSize <- 3
+kSize <- 5
 for(kSize in c(3:9)){
   pamk.best <-pamk(
     data.use.room.tryCluster[, 7:22],
@@ -174,7 +174,7 @@ ggsave(
 #根据试聚类的聚类数统一对6个季节进行聚类
 for(i in names(list.hznu.room.use)){
   list.hznu.room.use[[i]]$cluster<-pamk(
-    list.hznu.room.use[[i]][,7:21],
+    list.hznu.room.use[[i]][,c(paste("h",c(8:22),sep = ""),"runtime")],
     krange = getkSizeBySeason(i),
     criterion = "ch",
     usepam = FALSE,
