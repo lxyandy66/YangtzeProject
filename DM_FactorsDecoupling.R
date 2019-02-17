@@ -38,7 +38,7 @@ ggplot(data = stat.use.clusterDescribe.plot,aes(x=variable,y=value,group=cluster
 
 
 #转换为因子的预处理
-modeSelect<-"heating"
+modeSelect<-"cooling"
 data.hznu.use.final.modePickup<-data.hznu.use.final[finalState==modeSelect]#&modiSeason %in% c("Summer_warm","Transition" )]
 # > class(data.hznu.use.final.modePickup[,"h8"])
 # [1] "data.table" "data.frame"
@@ -55,7 +55,7 @@ data.hznu.use.final.modePickup$modiSeason<-as.factor(data.hznu.use.final.modePic
 ####统计各模式运行时间####
 stat.use.runtime<-boxplot(data = data.hznu.use.final,runtime~data.hznu.use.final$clusterName)
 data.hznu.use.final.modePickup$runtimeClass<-as.factor(sapply(data.hznu.use.final.modePickup$runtime,getRuntimeClass))
-
+# data.hznu.use.final.modePickup[clusterName=="halfDaytime"]$clusterName<-"daytime"
 
 ####训练集/测试集划分####
 set.seed(711)
@@ -63,7 +63,7 @@ sub<-sample(1:nrow(data.hznu.use.final.modePickup),round(nrow(data.hznu.use.fina
 data.hznu.use.tree.training<-data.hznu.use.final.modePickup[sub]
 data.hznu.use.tree.test<-data.hznu.use.final.modePickup[-sub]
 
-tree.both<-rpart(clusterName~modiSeason+h8+h9+h10+h11+h12
+tree.both<-rpart(clusterName~modiSeason+runtimeClass+h8+h9+h10+h11+h12
                  +h13+h14+h15+h16+h17+h18
                  +h19+h20+h21+h22,data=data.hznu.use.tree.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
 tree.both$cptable
@@ -75,8 +75,8 @@ plot(rpartTrue2)
 rtree.predict<-predict(rpartTrue2,data.hznu.use.tree.test)
 confusionMatrix(table(rtree.predict,data.hznu.use.tree.test$clusterName))
 
-capture.output(confusionMatrix(table(rtree.predict,data.hznu.use.tree.test$clusterName)),
-               file =paste("HZNU_行为_采暖_决策树评估_bestCP.txt"))
+capture.output(c(confusionMatrix(table(rtree.predict,data.hznu.use.tree.test$clusterName)),asRules(tree.both)),
+               file =paste("HZNU_行为_制冷_决策树评估_bestCP.txt"))
 
 
 getRuntimeClass<-function(time){
