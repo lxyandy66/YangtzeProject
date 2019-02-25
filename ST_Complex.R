@@ -44,8 +44,8 @@ data.raw.final$year<-substr(data.raw.final$time,1,4)
 data.raw.final$month<-substr(data.raw.final$time,6,7)
 data.raw.final$eui<-data.raw.final$value/data.raw.final$area
 boxplot(data=data.raw.final[DataSource=="Campus"],eui~month+year,outline=TRUE)
-ggplot(data=data.raw.final[DataSource=="Campus"&eui!=0&eui<3&typeCode%in% c("A","D","I")],
-         aes(x=month,y=eui,fill=typeCode))+geom_boxplot()+theme_bw()
+ggplot(data=data.raw.final[DataSource=="Campus"&eui!=0&eui<3&typeCode%in% c("D")],
+         aes(x=month,y=eui,fill=year))+geom_boxplot()+theme_bw()
 
 ####箱形图统计####
 nn<-boxplot(data = data.raw.final[eui!=0&typeCode=="D"],eui~month+typeCode,outline=FALSE)
