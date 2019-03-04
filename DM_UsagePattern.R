@@ -35,8 +35,10 @@ data.summary.state <-
 write.xlsx(x = data.summary.state, file = "使用模式统计.xlsx")
 
 #对不确定的运行状态进行定值
-data.yx$modiState <- data.yx$state
-data.yx[state == "dehum"]$modiState <- "cooling"
+
+data.all$modiState <- data.all$state
+data.all[state == "dehum"|state == "dehumi"]$modiState <- "cooling"
+data.all[state=="-"|state=="5"]$modiState<-NA
 #按典型月份对不确定空调状态进行处理
 # 这一部分先不做处理
 # data.yx[(month(time) >= 5 &
@@ -71,9 +73,9 @@ data.all <-
 # data.all <-
 #   data.all[, c("ac_code", "time", "total_elec", "modiState")]
 
-##此处可以直接倒入"HZNU_原始_能耗及热环境完整数据.rdata"
-
-data.all <- data.all[!duplicated(data.all), ]#重复10万多？？！
+##此处可以直接导入"HZNU_原始_能耗及热环境完整数据.rdata"
+##此处可以直接导入含追加的完整数据“HZNU_原始_含追加_能耗及热环境完整数据.rdata”
+data.all <- data.all[!duplicated(data.all), ]#重复60万多？？！
 #????
 
 
@@ -104,6 +106,8 @@ data.zju.distri <-
 # data.all <- data.zju.consumption
 
 ##对时间进行处理
+data.all$time1<-as.POSIXct(data.all$time,format="%Y-%m-%d %H:%M:%S") 
+
 data.all$year <- format(data.all$time, "%Y")
 data.all$month <- format(data.all$time, "%m")
 data.all$day <- format(data.all$time, "%d")

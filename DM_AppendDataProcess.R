@@ -65,10 +65,20 @@ data.mapping.acCode<-data.append.raw[,.(roomName=unique(roomName),
                                         acName=unique(innerName),
                                         acAppendCode=c(1:length(unique(innerName)))
                                         ),by=roomCode]
-data.mapping.acCode$acCode<-paste(data.mapping.acCode$roomCode,"f",sprintf("%02d",data.mapping.acCode$acAppendCode),sep = "")
+data.mapping.acCode$acCode<-paste(data.mapping.acCode$roomCode,"m",sprintf("%02d",data.mapping.acCode$acAppendCode),sep = "")
 data.mapping.acCode$acFullName<-paste(data.mapping.acCode$roomName,data.mapping.acCode$acName,sep = "_")
 data.append.raw$acFullName<-paste(data.append.raw$roomName,data.append.raw$innerName,sep = "_")
 data.append.raw<-merge(x=data.append.raw,y=data.mapping.acCode[,c("acFullName","acCode")],all.x = TRUE,by.x = "acFullName",by.y = "acFullName")
 
 ####完成追加数据初步处理，数据导出####
 data.append.final<-data.append.raw[,c("datetime","roomCode","acCode","innerTemp","setTemp","status","on_off","fanSpeed","innerEnergy","roomEnergy")]
+
+####统一新数据和旧数据变量名，汇总数据成新数据集####
+data.raw.complete<-data.table(time=data.append.final$datetime,ac_code=data.append.final$acCode,total_elec=data.append.final$innerEnergy,
+                              real_temp=data.append.final$innerTemp,set_temp=data.append.final$setTemp,state=data.append.final$status)
+
+data.raw.complete$time<-as.character(data.raw.complete$time)
+data.all$time<-as.character(data.all$time)
+
+data.raw.complete<-rbind(data.raw.complete,data.all[,c("time","ac_code","total_elec","real_temp","set_temp","state")])
+
