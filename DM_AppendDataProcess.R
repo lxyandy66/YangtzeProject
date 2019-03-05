@@ -52,10 +52,9 @@ data.append.raw[innerEnergy<=0]$status<-"off"
 ####房间编码对应####
 data.mapping.roomCode.old<-as.data.table(read.csv(file = "杭师大完成_房间属性-教学.csv"))
 names(data.mapping.roomCode.old)<-c("roomName","roomCode","roomType")
-data.mapping.roomCode.old$roomName<-paste("恕园",data.mapping.roomCode.old$roomName,sep = "")
 data.mapping.roomCode.old$roomType<-NULL
 
-data.mapping.roomCode.append<-read.xlsx(file = "HZNU_AppendRoomName.xlsx",sheetIndex = 1,encoding = "UTF-8")
+data.mapping.roomCode.append<-read.csv(file = "HZNU_AppendRoomName.csv",encoding = "gbk")
 data.mapping.roomCode.all<-as.data.table(rbind(data.mapping.roomCode.old,data.mapping.roomCode.append[,c("roomName","roomCode")]))
 
 data.append.raw<-merge(data.append.raw,data.mapping.roomCode.all,all.x = TRUE,by.x = "roomName",by.y = "roomName")
@@ -72,6 +71,9 @@ data.append.raw<-merge(x=data.append.raw,y=data.mapping.acCode[,c("acFullName","
 
 ####完成追加数据初步处理，数据导出####
 data.append.final<-data.append.raw[,c("datetime","roomCode","acCode","innerTemp","setTemp","status","on_off","fanSpeed","innerEnergy","roomEnergy")]
+data.append.final$status<-as.character(data.append.final$status)
+data.append.final$on_off<-as.character(data.append.final$on_off)
+
 
 ####统一新数据和旧数据变量名，汇总数据成新数据集####
 data.raw.complete<-data.table(time=data.append.final$datetime,ac_code=data.append.final$acCode,total_elec=data.append.final$innerEnergy,
@@ -79,6 +81,7 @@ data.raw.complete<-data.table(time=data.append.final$datetime,ac_code=data.appen
 
 data.raw.complete$time<-as.character(data.raw.complete$time)
 data.all$time<-as.character(data.all$time)
-
+data.all$state<-as.character(data.all$state)
+data.all$ac_code<-as.character(data.all$ac_code)
 data.raw.complete<-rbind(data.raw.complete,data.all[,c("time","ac_code","total_elec","real_temp","set_temp","state")])
 
