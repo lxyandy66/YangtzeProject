@@ -1,11 +1,3 @@
-library(data.table)
-library(forecast)
-library(ggplot2)
-library(car)
-library(gvlma)
-library(pls)
-library(kernlab)
-
 #接最原始数据集####
 
 data.yx$labelMerge<-paste(data.yx$ac_code,data.yx$time)
@@ -74,7 +66,7 @@ data.hznu.predict$hour<-format(data.hznu.predict$time,"%H")
 data.hznu.predict$labelBuildingHour <-
   paste(data.hznu.predict$buildingCode, as.Date(data.hznu.predict$time), data.hznu.predict$hour,sep = "-")#标签：建筑号-年月日-小时
 
-ggplot(data=data.hznu.predict,aes)+geom_boxplot(aes(y=total_elec))+geom_boxplot(aes(y=modifyElec))+ylim(0,10)# geom_histogram()+xlim(0,10)+ylim(0,50000)
+ggplot(data=data.hznu.predict)+geom_histogram(aes(y=total_elec))#+geom_boxplot(aes(y=total_elec))+geom_boxplot(aes(y=modifyElec))+ylim(0,10)# +xlim(0,10)+ylim(0,50000)
 
 ####与热环境过滤的数据集合并####
 #将预测数据除去热环境中过滤掉的异常值
@@ -89,19 +81,17 @@ ggplot(data=data.hznu.predict[on_off==1],aes(x=total_elec))+geom_density()
 
 ####能耗修正####
 #统计开机状态下的能耗值，选上限为
+data.hznu.predict.raw<-data.hznu.predict#原始能耗数据备份
+data.hznu.predict<-data.hznu.predict[!is.na(total_elec)]
 data.hznu.predict[total_elec<0]$total_elec<-0
-ecLim<-mean(data.hznu.predict[on_off==1]$total_elec)+1.96*sd(data.hznu.predict[on_off==1]$total_elec)
+data.hznu.predict$on_off<-ifelse(data.hznu.predict$total_elec<=0.2,0,1)
+data.hznu.predict[on_off!=0&total_elec>0.2]$on_off<-1
+ecLim<-mean(data.hznu.predict[on_off==1]$total_elec,na.rm = TRUE)+3*sd(data.hznu.predict[on_off==1]$total_elec,na.rm = TRUE)
 # > ecLim
-# [1] 3.05254
-#> boxplot.stats(data.hznu.predict[on_off==1]$total_elec)
-# $stats
-# [1] 0.2000000 0.5428571 0.9333333 1.5333333 3.0185966
-# $n
-# [1] 587462
-# $conf
-# [1] 0.9312915 0.9353751
-length(data.hznu.predict[total_elec>ecLim]$time)/length(data.hznu.predict[on_off==1]$time)
-#[1] 0.04784139
+# [1] 4.883569
+
+length(data.hznu.predict[total_elec>ecLim&on_off==1]$time)/length(data.hznu.predict[on_off==1]$time)
+#[1] 0.01942678
 
 
 #该方法效果不佳
@@ -111,6 +101,7 @@ data.hznu.predict$modifyElec<- data.hznu.predict$total_elec
 data.hznu.predict[labelAcHour %in% data.hznu.predict.modify$labelAcHour]$modifyElec<- 
   data.hznu.predict.modify$modifyElec
 rm(data.hznu.predict.modify)
+
 
 data.hznu.predict$modifyElec<-data.hznu.predict$total_elec
 data.hznu.predict.normal<-data.hznu.predict[total_elec<=ecLim]
@@ -128,12 +119,14 @@ plot(data.hznu.predict[on_off==1]$total_elec,type="l")
 lines(data.hznu.predict[on_off==1]$modifyElec,col="red")#绘图太慢
 plot(data.hznu.predict[total_elec<10]$total_elec)
 
+ggplot(data=data.hznu.predict[on_off==1])+geom_density(aes(x=total_elec))+geom_density(aes(x=modifyElec,color="red"))
+
 ####将半小时数据转化为一小时,即原始末端小时级数据####
 data.hznu.predict$labelAcHour<-paste(data.hznu.predict$ac_code,format(data.hznu.predict$time,format = "%Y-%m-%d-%H"),sep = "-")
 setorder(data.hznu.predict,time,ac_code)
 data.hznu.predict.hour<-data.hznu.predict[,.(time=time[1],ac_code=ac_code[1],
-                                             total_elec=sum(total_elec),
-                                             on_off=ifelse(sum(on_off)>=1,1,0),
+                                             total_elec=sum(total_elec,na.rm=TRUE),
+                                             on_off=ifelse(sum(on_off,na.rm=TRUE)>=1,1,0),
                                              set_temp=mean(set_temp[on_off==1]),
                                              real_temp = mean(real_temp[on_off == 1]),
                                              temp_diff = mean(real_temp[on_off == 1] - set_temp[on_off == 1]),
@@ -142,7 +135,7 @@ data.hznu.predict.hour<-data.hznu.predict[,.(time=time[1],ac_code=ac_code[1],
                                              w_hum = mean(w_hum)
                                              ),by=labelAcHour]
 
-save(data.hznu.predict,file = "HZNU_预测用原始数据_半小时_已清洗能耗及热环境数据.rdata")
+save(data.hznu.predict,file = "HZNU_含追加_半小时_能耗_已清洗.rdata")
 
 ####将数据转换为建筑小时级数据####
 #data.hznu.predict为原始末端数据，已过滤及清洗

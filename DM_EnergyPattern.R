@@ -11,9 +11,9 @@ library(rJava)
 library(xlsx)
 
 ####能耗聚类模式####
-#接能耗已处理清洗数据 data.hznu.predict
+#接能耗已处理清洗数据 data.hznu.predict(已清洗_末端半小时级)
 
-data.hznu.predict$date<-format(data.hznu.predict$time,"%Y-%m-%d")
+data.hznu.predict$date<-substr(data.hznu.predict$time,1,10)
 
 data.hznu.predict$labelRoomHour<-paste(data.hznu.predict$roomCode,data.hznu.predict$date,
                                        data.hznu.predict$hour,sep = "_")
@@ -24,9 +24,9 @@ data.hznu.predict$labelAcHour<-paste(data.hznu.predict$ac_code,
 setorder(data.hznu.predict,time,ac_code)
 data.hznu.energy.ac.hourly<-data.hznu.predict[,.(time=time[1],
                                                  ac_code=ac_code[1],
-                                                 total_elec=sum(total_elec),
-                                                 on_off=ifelse(sum(on_off)>0,1,0),
-                                                 modifyElec=sum(modifyElec),
+                                                 total_elec=sum(total_elec,na.rm = TRUE),
+                                                 on_off=ifelse(sum(on_off,na.rm = TRUE)>0,1,0),
+                                                 modifyElec=sum(modifyElec,na.rm = TRUE),
                                                  date=date[1]
                                                  ),by=labelAcHour]
 data.hznu.energy.ac.hourly$labelAcDay<-paste(data.hznu.energy.ac.hourly$ac_code,
@@ -35,23 +35,26 @@ data.hznu.energy.ac.hourly$labelAcDay<-paste(data.hznu.energy.ac.hourly$ac_code,
                                            ##!!!!切记如果直接用as.Date()会有时区问题，默认时区是UTC
 #####整理末端-小时级数据至以天为单位的宽数据####
 #统计各空调一天记录是否完整
-data.hznu.energy.ac.hourly$hour<-as.numeric(format(data.hznu.energy.ac.hourly$time,"%H"))
-data.hznu.energy.ac.hourly.pickup<-data.hznu.energy.ac.hourly[hour>=8&hour<=22]
+data.hznu.energy.ac.hourly$time<-as.POSIXct(data.hznu.energy.ac.hourly$time,format="%Y-%m-%d %H:%M:%S")
+data.hznu.energy.ac.hourly$hour<-format(data.hznu.energy.ac.hourly$time, format = "%H")
+data.hznu.energy.ac.hourly.pickup<-data.hznu.energy.ac.hourly[hour %in% sprintf("%02d",c(8:22))]
 data.hznu.energy.checkComplete<-data.hznu.energy.ac.hourly.pickup[,.(
   ac_code=ac_code[1],count=length(ac_code)),by=labelAcDay]
-#按热环境清洗数据
-#记录小时  2      4      5      6      7      8      9     10     11     12     13     14     15 
-#条数     12     41      1    195     22    128    177     16     12      1     65     31 257905 
 #未清洗仅修正
-#记录小时 1      2      3      4      5      6      7      8      9     10     11     12     13     14     15 
-#条数 7     13      1     50      9    307     96    167    266     38     54      4    127     37 470656 
+#记录小时    1       2       3       4       5       6       7       8       9      10      11      12      13      14      15 
+#条数       2236    1794    1758    1909    2042    3251    5202    4497    3811    3087    3437    4280    4970    5208 1125372 
 data.hznu.energy.ac.hourly.pickup<-data.hznu.energy.ac.hourly.pickup[
   labelAcDay %in% data.hznu.energy.checkComplete[count==15]$labelAcDay]#剔除不完整的数据
 # rm(data.hznu.energy.ac.hourly)
+#修正开关位标记
+data.hznu.energy.ac.hourly.pickup[total_elec<0.2]$on_off<-0
+data.hznu.energy.ac.hourly.pickup[total_elec>=0.2&on_off==0]$on_off<-1
+
 setorder(data.hznu.energy.ac.hourly.pickup,time,ac_code)
 data.hznu.energy.ac.day<-data.hznu.energy.ac.hourly.pickup[,.(date=date[1],
                                                        ac_code=ac_code[1],
-                                                       sumElec=sum(modifyElec),
+                                                       runtime=sum(on_off,na.rm = TRUE),
+                                                       sumElec=sum(modifyElec,na.rm = TRUE),
                                                        h8=modifyElec[1],
                                                        h9=modifyElec[2],
                                                        h10=modifyElec[3],
@@ -73,27 +76,27 @@ data.hznu.energy.ac.day<-data.hznu.energy.ac.hourly.pickup[,.(date=date[1],
 data.hznu.energy.ac.day$roomCode<-substr(data.hznu.energy.ac.day$ac_code,1,13)
 data.hznu.energy.ac.day$labelRoomDay<-paste(data.hznu.energy.ac.day$roomCode,
                                             data.hznu.energy.ac.day$date,sep = "_")
-data.hznu.energy.ac.day$date<-as.Date(data.hznu.energy.ac.day$date)
+
 setorder(data.hznu.energy.ac.day,date,ac_code)
 data.hznu.energy.room.day<-data.hznu.energy.ac.day[,.(roomCode=roomCode[1],
                                                       acCount=length(unique(ac_code)),
                                                       date=date[1],
-                                                      sumElec=sum(sumElec),
-                                                      h8=sum(h8),
-                                                      h9=sum(h9),
-                                                      h10=sum(h10),
-                                                      h11=sum(h11),
-                                                      h12=sum(h12),
-                                                      h13=sum(h13),
-                                                      h14=sum(h14),
-                                                      h15=sum(h15),
-                                                      h16=sum(h16),
-                                                      h17=sum(h17),
-                                                      h18=sum(h18),
-                                                      h19=sum(h19),
-                                                      h20=sum(h20),
-                                                      h21=sum(h21),
-                                                      h22=sum(h22)
+                                                      sumElec=sum(sumElec,na.rm = TRUE),
+                                                      h8=sum(h8,na.rm = TRUE),
+                                                      h9=sum(h9,na.rm = TRUE),
+                                                      h10=sum(h10,na.rm = TRUE),
+                                                      h11=sum(h11,na.rm = TRUE),
+                                                      h12=sum(h12,na.rm = TRUE),
+                                                      h13=sum(h13,na.rm = TRUE),
+                                                      h14=sum(h14,na.rm = TRUE),
+                                                      h15=sum(h15,na.rm = TRUE),
+                                                      h16=sum(h16,na.rm = TRUE),
+                                                      h17=sum(h17,na.rm = TRUE),
+                                                      h18=sum(h18,na.rm = TRUE),
+                                                      h19=sum(h19,na.rm = TRUE),
+                                                      h20=sum(h20,na.rm = TRUE),
+                                                      h21=sum(h21,na.rm = TRUE),
+                                                      h22=sum(h22,na.rm = TRUE)
                                                       ),by=labelRoomDay]
 
 ####增加基本使用模式标签####
