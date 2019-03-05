@@ -38,7 +38,7 @@ write.xlsx(x = data.summary.state, file = "使用模式统计.xlsx")
 
 data.all$modiState <- data.all$state
 data.all[state == "dehum"|state == "dehumi"]$modiState <- "cooling"
-data.all[state=="-"|state=="5"]$modiState<-NA
+data.all[(state=="-"|state=="5")&total_elec<0.2]$modiState<-NA
 #按典型月份对不确定空调状态进行处理
 # 这一部分先不做处理
 # data.yx[(month(time) >= 5 &
@@ -106,8 +106,7 @@ data.zju.distri <-
 # data.all <- data.zju.consumption
 
 ##对时间进行处理
-data.all$time1<-as.POSIXct(data.all$time,format="%Y-%m-%d %H:%M:%S") 
-
+data.all$time<-as.POSIXct(data.all$time,format="%Y-%m-%d %H:%M:%S") 
 data.all$year <- format(data.all$time, "%Y")
 data.all$month <- format(data.all$time, "%m")
 data.all$day <- format(data.all$time, "%d")
@@ -127,23 +126,32 @@ data.all[total_elec >= 0.2 & modiState == "off"]$modiState <-
                       modiState == "off"]$month <= 10, "cooling", "heating")
 #还是不舍去了#能耗大于运行阈值但状态为关的共有774条，直接舍去
 # data.all[modiState=="off"]$total_elec<-0
+data.all$on_off<-data.all$modiState
+data.all[total_elec>=0.2]$on_off<-"1"
+data.all[total_elec<0.2]$on_off<-"0"
+data.all[on_off!="1"&on_off!="0"]$on_off<-NA###注意此处有能耗为NA的，on_off则直接复制了modiState
+data.all$on_off<-as.character(data.all$on_off)#注意factor直接转numeric会变成level值
+data.all$on_off<-as.numeric(data.all$on_off)
 
-data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
-data_offLog <- data.all[total_elec < 0.2]
-data_onLog$on_off <- "1"
-data_offLog$on_off <- "0"##这里溢出，慢慢跑
+##不用这么麻烦了
+#data_onLog <- data.all[total_elec >= 0.2]#数据清洗阈值还需要再考虑
+#data_offLog <- data.all[total_elec < 0.2]
+#data_onLog$on_off <- "1"
+#data_offLog$on_off <- "0"##这里溢出，慢慢跑
 #.()为list()的一个别名。如果使用.(),返回的为一个data.table对象。如果不使用.()，结果为返回一个向量。
+#data.all <- rbind(data_onLog, data_offLog)
 
-data.all <- rbind(data_onLog, data_offLog)
 setorder(data.all, ac_code, time)
 data.all$label1 <-
   paste(data.all$ac_code, data.all$date, data.all$hour, sep = "-")#label1 空调名-日期-小时
-data.all$on_off <- as.numeric(data.all$on_off)
+unique(data.all$on_off)
+
+
 
 # nn<-data.all[modiState=="off"&on_off!=0] #这里没问题，此处提取出来为空
 
 all_on_off <-
-  data.all[, .(runtime = sum(on_off)), by = ac_code]#对单台空调计算开关机情况
+  data.all[, .(runtime = sum(on_off,na.rm = TRUE)), by = ac_code]#对单台空调计算开关机情况
 acOn <- all_on_off[runtime >= 10]#将全年开机次数大于10次的算在有使用的记录中，阈值10次？？？
 new.data.all0 <- data.all[ac_code %in% acOn$ac_code]
 # rm(data.all)
@@ -154,25 +162,30 @@ new.data.all1 <-
     ac_code = ac_code[1],
     time = time[1],
     date = date[1],
-    on_off = sum(on_off),
-    total_elec = sum(total_elec),
+    on_off = sum(on_off,na.rm=TRUE),
+    total_elec = sum(total_elec,na.rm=TRUE),
     year = year[1],
     month = month[1],
     day = day[1],
     label = unique(label),
     hour = hour[1],
-    state = ifelse(sum(on_off) == 0, "off", unique(modiState[on_off!=0]))#应该这么写unique(modiState[on_off!=0])
+    state = ifelse(sum(on_off,na.rm=TRUE) == 0, "off", unique(modiState[on_off!=0]))#应该这么写unique(modiState[on_off!=0])
   ), by = label1]
 #将半个小时的数据化为一个小时的数据
+#搞不懂为什么会一个小时内有4条记录的
 
-newdata_0 <- new.data.all1[on_off == 0]
-newdata_1 <- new.data.all1[on_off >= 1]#emmm这里也没必要这么复杂
-newdata_1$on_off <- 1
-newdata <- rbind(newdata_0, newdata_1)
-rm(newdata_0)
-rm(newdata_1)
+new.data.all1[on_off>=1]$on_off<-1
+new.data.all1[on_off<=0]$on_off<-0
+
+#newdata_0 <- new.data.all1[on_off == 0]
+#newdata_1 <- new.data.all1[on_off >= 1]#emmm这里也没必要这么复杂
+#newdata_1$on_off <- 1
+#newdata <- rbind(newdata_0, newdata_1)
+#rm(newdata_0)
+#rm(newdata_1)
 gc()
-newdata <- newdata[hour %in% sprintf("%02d",c(8:22))]#过滤只取8-22点的数据
+
+newdata <- new.data.all1[hour %in% sprintf("%02d",c(8:22))]#过滤只取8-22点的数据
 setorder(newdata, label, hour)
 newdata <- newdata[!duplicated(newdata)]
 # rm(new.data.all1)
@@ -182,9 +195,8 @@ data.labelSelect <- newdata[, .(num = length(on_off)), by = label]
 newdata <- newdata[label %in% data.labelSelect[num == 15]$label]
 
 nn<-newdata[on_off!=0&state=="off"]
-newdata$state1<-newdata$state#除了多一行还有没有直接在list里面操作的办法？？？
 raw.rawData <- newdata[, .(
-  runtime = sum(on_off),
+  runtime = sum(on_off,na.rm=TRUE),
   date = unique(date),
   ac_code = unique(ac_code),
   state = getMode(state[state!="off"]),#emmmm
@@ -215,6 +227,22 @@ raw.rawData$season <-sapply(raw.rawData$month,getSeason,simplify = TRUE)
 raw.rawData$monthPeriod<-paste(raw.rawData$month,sapply(simplify=TRUE,
  as.numeric(substr(raw.rawData$date,9,10)),getMonthPeriod),sep = "_")
 
+####修正空调工作状态####
+raw.rawData[runtime==0]$state<-"off"
+raw.rawData$modiState<-raw.rawData$state
+raw.rawData[(month>= 5 &
+            month <= 10) &
+           (modiState == "other" |
+              modiState == "auto" | modiState == "venti")]$modiState <- "cooling"
+raw.rawData[(month %in% c(11, 12, 1, 2, 3, 4)) &
+           (modiState == "other" |
+              modiState == "auto" | modiState == "venti")]$modiState <- "heating"
+##强行修正异常数据
+raw.rawData$finalState<-raw.rawData$modiState
+raw.rawData[(month %in% c(6:9))& modiState!="off"]$finalState<-"cooling"
+raw.rawData[(month %in% c(12, 1, 2, 3)) & modiState!="off"]$finalState <- "heating"
+raw.rawData[finalState=="5"]$finalState<-"heating"#就这一条emmm
+
 
 raw.noneOn <- raw.rawData[runtime == 0]
 raw.fullOn <- raw.rawData[runtime == 15]
@@ -223,6 +251,7 @@ raw.periodOn <- raw.rawData[runtime != 15 & runtime != 0]
 raw.noneOn$state<-"off"
 
 data.summary.modeSeason <- rbind(raw.noneOn, raw.periodOn)[, .(
+  month=unique(month),
   sum = length(label),
   useCount = length(label[runtime > 0]),
   noneUseCount = length(label[runtime == 0]),
@@ -245,6 +274,9 @@ data.summary.modiState<-as.data.table(rbind(raw.noneOn, raw.periodOn))[,.(
 ),by=season]
 
 write.xlsx(x=data.summary.modeSeason,file = "HZNU_行为_逐月使用及空调工况统计.xlsx")
+
+write.csv(data.summary.modeSeason,file = "HZNU_含追加_末端级_行为_逐月使用及空调工况统计.csv")
+write.csv(data.summary.modiState,file = "HZNU_含追加_末端级_行为_修正空调工况统计.csv")
 
 if (anyNA(raw.periodOn)) {
   raw.periodOn <- na.omit(raw.periodOn)

@@ -18,6 +18,7 @@ library(partykit)
 library(caret)
 library(rattle)
 library(pROC)
+library(rgl)
 
 ####预处理部分####
 getMode <- function(x) {

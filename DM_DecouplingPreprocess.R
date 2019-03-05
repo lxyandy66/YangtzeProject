@@ -1,15 +1,3 @@
-library(data.table)
-library(fpc)
-library(cluster)
-library(ggplot2)
-library(ggradar)
-library(knitr)
-library(psych)
-library(plyr)
-library(timeDate)
-library(rJava)
-library(xlsx)
-library(rgl)
 
 ########行为模式解耦预处理########
 ####此处接已处理好使用模式的空调行为数据####
@@ -37,54 +25,42 @@ raw.rawData$finalState<-raw.rawData$modiState
 raw.rawData[season=="Summer"&finalState=="heating"]$finalState<-"cooling"
 raw.rawData[season=="Winter"&finalState=="cooling"]$finalState<-"heating"
 
-####开关状态统计为单个房间####
-raw.rawData$roomCode<-substr(raw.rawData$ac_code,1,13)
-
-raw.noneOn <- raw.rawData[runtime == 0]
-raw.fullOn <- raw.rawData[runtime == 15]
-raw.periodOn <- raw.rawData[runtime != 15 & runtime != 0]
-
-####一些预处理####
-raw.fullOn$pattern<-"fullUse"#pattern对应聚类所得空调使用模式
-raw.noneOn$pattern<-"noneUse"
-raw.periodOn$pattern<-"NULL"
-
-raw.rawData$labelRoomDay<-paste(raw.rawData$roomCode,raw.rawData$date,sep = "_")
-raw.rawData[runtime == 0]$pattern<-"noneUse"
-raw.rawData[runtime == 15]$pattern<-"fullUse"
-raw.rawData[runtime != 15 & runtime != 0]$pattern<-"periodUse"
-
 ####异常数据的去除####
 #如夏季制热冬季制冷
 raw.rawData$removeFlag<-FALSE
-raw.rawData[(season=="Summer"|season=="Summer_warm")&finalState=="heating"]$removeFlag<-TRUE
-raw.rawData[(season=="Winter"|season=="Winter_warm")&finalState=="cooling"]$removeFlag<-TRUE
+raw.rawData[(season=="Summer"|season=="Summer_warm")&finalState=="heating"]$finalState<-"cooling"
+raw.rawData[(season=="Winter"|season=="Winter_warm")&finalState=="cooling"]$finalState<-"heating"
+
+####开关状态统计为单个房间####
+raw.rawData$roomCode<-substr(raw.rawData$ac_code,1,13)
+raw.rawData$labelRoomDay<-paste(raw.rawData$roomCode,raw.rawData$date,sep = "_")
 
 ####空调使用记录转为日内房间级使用记录####
-data.hznu.use.room.day<-raw.rawData[removeFlag==FALSE,.(date=date[1],
+data.hznu.use.room.day<-raw.rawData[,.(date=date[1],
                                        roomCode=roomCode[1],
                                        acCount=length(unique(ac_code)),
                                        finalState=ifelse(length(finalState[finalState!="off"])==0,"off",
                                                          getMode(finalState[finalState!="off"])),
                                        #注意需要特殊处理，否则用unique会存在finalState为off/heating 或者 cooling/heating的问题没有解决
                                        season=season[1],
-                                       h8=ifelse(sum(h1)>0,1,0),
-                                       h9=ifelse(sum(h2)>0,1,0),
-                                       h10=ifelse(sum(h3)>0,1,0),
-                                       h11=ifelse(sum(h4)>0,1,0),
-                                       h12=ifelse(sum(h5)>0,1,0),
-                                       h13=ifelse(sum(h6)>0,1,0),
-                                       h14=ifelse(sum(h7)>0,1,0),
-                                       h15=ifelse(sum(h8)>0,1,0),
-                                       h16=ifelse(sum(h9)>0,1,0),
-                                       h17=ifelse(sum(h10)>0,1,0),
-                                       h18=ifelse(sum(h11)>0,1,0),
-                                       h19=ifelse(sum(h12)>0,1,0),
-                                       h20=ifelse(sum(h13)>0,1,0),
-                                       h21=ifelse(sum(h14)>0,1,0),
-                                       h22=ifelse(sum(h15)>0,1,0)
+                                       h8=ifelse(sum(h1,na.rm = TRUE)>0,1,0),
+                                       h9=ifelse(sum(h2,na.rm = TRUE)>0,1,0),
+                                       h10=ifelse(sum(h3,na.rm = TRUE)>0,1,0),
+                                       h11=ifelse(sum(h4,na.rm = TRUE)>0,1,0),
+                                       h12=ifelse(sum(h5,na.rm = TRUE)>0,1,0),
+                                       h13=ifelse(sum(h6,na.rm = TRUE)>0,1,0),
+                                       h14=ifelse(sum(h7,na.rm = TRUE)>0,1,0),
+                                       h15=ifelse(sum(h8,na.rm = TRUE)>0,1,0),
+                                       h16=ifelse(sum(h9,na.rm = TRUE)>0,1,0),
+                                       h17=ifelse(sum(h10,na.rm = TRUE)>0,1,0),
+                                       h18=ifelse(sum(h11,na.rm = TRUE)>0,1,0),
+                                       h19=ifelse(sum(h12,na.rm = TRUE)>0,1,0),
+                                       h20=ifelse(sum(h13,na.rm = TRUE)>0,1,0),
+                                       h21=ifelse(sum(h14,na.rm = TRUE)>0,1,0),
+                                       h22=ifelse(sum(h15,na.rm = TRUE)>0,1,0)
                                        ),by=labelRoomDay]
-data.hznu.use.room.day$runtime<-apply(data.hznu.use.room.day[,c(7:21)],1,sum)#计算总使用时间
+data.hznu.use.room.day$runtime<-apply(data.hznu.use.room.day[,c(7:21)],1,function(x) {sum(x,na.rm = TRUE) } )#计算总使用时间
+#切记sum如果不将na.rm设为TRUE则有缺失值结果即为NA
 data.hznu.use.room.day$basePattern<-ifelse(data.hznu.use.room.day$runtime==0,"noneUse",
                                            ifelse(data.hznu.use.room.day$runtime==15,"fullUse","periodUse"))
 data.hznu.use.room.day$month<-substr(data.hznu.use.room.day$date,6,7)
@@ -101,13 +77,28 @@ data.hznu.use.room.day$modiSeason<-data.hznu.use.room.day$season
 data.hznu.use.room.day[modiSeason=="Spring"|modiSeason=="Autumn"]$modiSeason<-"Transition"
 data.hznu.use.room.day.period<-data.hznu.use.room.day[runtime>0&runtime<15]
 
+##存在一些使用状态缺失的，由于其runtime!=0，根据季节确定finalState
+data.hznu.use.room.day.period[is.na(finalState)&(modiSeason=="Winter"|modiSeason=="Winter_warm")]$finalState<-"heating"
+data.hznu.use.room.day.period[is.na(finalState)&(modiSeason=="Summer"|modiSeason=="Summer_warm")]$finalState<-"cooling"
+
+
+
 #?????需要确定聚类的分类，不同工况分开聚？不同季节分开聚？????
 list.hznu.room.use<-split(data.hznu.use.room.day.period,
                           f=as.factor(paste(data.hznu.use.room.day.period$finalState,
                                             data.hznu.use.room.day.period$modiSeason,sep = "_")))
+list.hznu.room.use[["NA_Transition"]]<-NULL#过渡季缺失不能用
+
+
+##可接"HZNU_含追加_房间级_行为预处理完成.rdata"
+
 ####行为再聚类####
 ####试聚类####
 #聚类评估
+#names(list.hznu.room.use)
+#"cooling_Summer"      "cooling_Summer_warm" "cooling_Transition"  "heating_Transition"  
+#"heating_Winter"      "heating_Winter_warm"
+
 modeSelect<-"cooling_Summer_warm"
 data.use.room.tryCluster<-list.hznu.room.use[[modeSelect]]
 
