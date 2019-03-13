@@ -1,15 +1,3 @@
-library(data.table)
-library(fpc)
-library(cluster)
-library(ggplot2)
-library(ggradar)
-library(knitr)
-library(psych)
-library(plyr)
-library(timeDate)
-library(rJava)
-library(xlsx)
-
 ####能耗聚类模式####
 #接能耗已处理清洗数据 data.hznu.predict(已清洗_末端半小时级)
 
@@ -98,6 +86,7 @@ data.hznu.energy.room.day<-data.hznu.energy.ac.day[,.(roomCode=roomCode[1],
                                                       h21=sum(h21,na.rm = TRUE),
                                                       h22=sum(h22,na.rm = TRUE)
                                                       ),by=labelRoomDay]
+ggplot(data=data.hznu.energy.room.day[sumElec!=0],aes(x=sumElec))+geom_density()+xlim(0,150)
 
 ####增加基本使用模式标签####
 # basePattern={"noneUSe","periodUse","fullUse"}
