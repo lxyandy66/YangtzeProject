@@ -68,11 +68,48 @@ data.all.annualSum$annualEUI<-data.all.annualSum$annualEnergy/data.all.annualSum
 boxplot(data=data.all.annualSum[DataSource=="CPLX"],annualEUI~typeCode,outline=FALSE,xlab="Type Code",ylab="Annual EUI (kWh/ m^2)")
 
 ####建筑情况统计####
-data.building.info<-data.raw.final[,.(count=length(unique(BuildingCode)),
-                                      meanArea=mean(area,na.rm = TRUE),
-                                      maxArea=max(area,na.rm = TRUE),
-                                      minArea=min(area,na.rm = TRUE)
-                                                   ),by=typeCode]
+####公建按20000平方米划分，办公建筑以党政机关划分
+data.building.info<-data.raw.final[,.(DataSource=DataSource[1],
+                                      SchoolName=SchoolName[1],
+                                      area=area[1],
+                                      typeCode=typeCode[1]
+                                      ),by=BuildingCode]
+#按面积分类大型公建
+data.building.info$isLarge<- NA#-1表示不适用，此处用于如高校等数据源的建筑
+data.building.info[DataSource=="CPLX"&area>=20000]$isLarge<-TRUE
+data.building.info[DataSource=="CPLX"&area<20000]$isLarge<-FALSE
+data.raw.final<-merge(x=data.raw.final,y=data.building.info[,c("BuildingCode","isLarge")],all.x = TRUE,
+                      by.x = "BuildingCode",by.y = "BuildingCode")
+data.raw.final$isLarge<-as.factor(data.raw.final$isLarge)
+ggplot(data = data.raw.final[DataSource=="CPLX"&eui!=0],aes(x=month,y=eui,color=isLarge))+
+  ylim(0,10)+geom_boxplot()+facet_wrap(~typeCode,nrow = 3)
+
+#按党政机关分类大型公建办公
+data.hashmap.party<-as.data.table(read.xlsx("partyBuildingHashMap.xlsx",sheetIndex = 1))
+data.raw.final$isParty<-NA
+data.raw.final[typeCode=="M"]$isParty<-FALSE
+data.raw.final[BuildingCode %in% data.hashmap.party$BuildingCode]$isParty<-TRUE
+ggplot(data = data.raw.final[typeCode=="M"&eui!=0],aes(x=month,y=eui))+geom_boxplot(aes(color=isParty))+ylim(0,10)
+ggplot(data = data.raw.final[typeCode=="M"&eui!=0],aes(x=month,y=eui))+geom_boxplot(aes(color=isLarge))+ylim(0,10)
+
+data.raw.final$labelTypeDetail<-NA
+data.raw.final[DataSource=="CPLX"]$labelTypeDetail<-
+  paste(data.raw.final[DataSource=="CPLX"]$typeCode,data.raw.final[DataSource=="CPLX"]$isLarge,sep = "_")
+data.raw.final[DataSource=="Campus"]$labelTypeDetail<-
+  paste(data.raw.final[DataSource=="Campus"]$typeCode,data.raw.final[DataSource=="Campus"]$SchoolType,sep = "_")
+
+stat.building.summary<-data.raw.final[,.(typeCode=typeCode[1],
+                                        count=length(unique(BuildingCode)),
+                                        meanArea=mean(area,na.rm = TRUE),
+                                        maxArea=max(area,na.rm = TRUE),
+                                        minArea=min(area,na.rm = TRUE)
+                                        # countSchoolA=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="A"])),
+                                        # countSchoolB=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="B"])),
+                                        # countSchoolC=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="C"])),
+                                        # countLarge=length(unique(BuildingCode[DataSource=="CPLX"&isLarge=="1"])),
+                                        # countNotLarge=length(unique(BuildingCode[DataSource=="CPLX"&isLarge=="0"]))
+                                                     ),by=labelTypeDetail]
+write.xlsx(x=stat.building.summary,file = "All_BuildingSummary.xlsx")
 
 ####箱形图统计####
 nn<-boxplot(data = data.raw.final[eui!=0&typeCode=="D"],eui~month+typeCode,outline=FALSE)
