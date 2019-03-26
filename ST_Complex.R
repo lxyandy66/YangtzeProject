@@ -54,20 +54,9 @@ data.raw.final<-merge(x=data.raw.final,y=data.hashmap.schoolType[,c("SchoolCode"
 ggplot(data = data.raw.final[DataSource=="Campus"&eui!=0],aes(x=month,y=eui,color=SchoolType))+
   ylim(0,10)+geom_boxplot()+facet_wrap(~typeCode,nrow = 3)
 
-####全年统计####
-data.raw.final$labelBuildingYear<-paste(data.raw.final$BuildingCode,data.raw.final$year,sep = "_")
-data.building.selection<-data.raw.final[eui>0,.(count=length(BuildingCode)),by=labelBuildingYear]
-data.raw.pickFullYear<-data.raw.final[labelBuildingYear %in% unique(data.building.selection[count==12]$labelBuildingYear)]
-data.all.annualSum<-data.raw.pickFullYear[eui!=0,.(BuildingCode=BuildingCode[1],
-                                                   DataSource=DataSource[1],
-                                                   typeCode=typeCode[1],
-                                                   year=year[1],
-                                                   annualEnergy=sum(value,na.rm = TRUE),
-                                                   area=area[1]),by=labelBuildingYear]
-data.all.annualSum$annualEUI<-data.all.annualSum$annualEnergy/data.all.annualSum$area
-boxplot(data=data.all.annualSum[DataSource=="CPLX"],annualEUI~typeCode,outline=FALSE,xlab="Type Code",ylab="Annual EUI (kWh/ m^2)")
 
-####建筑情况统计####
+
+####建筑信息情况统计####
 ####公建按20000平方米划分，办公建筑以党政机关划分
 data.building.info<-data.raw.final[,.(DataSource=DataSource[1],
                                       SchoolName=SchoolName[1],
@@ -83,6 +72,30 @@ data.raw.final<-merge(x=data.raw.final,y=data.building.info[,c("BuildingCode","i
 data.raw.final$isLarge<-as.factor(data.raw.final$isLarge)
 ggplot(data = data.raw.final[DataSource=="CPLX"&eui!=0],aes(x=month,y=eui,color=isLarge))+
   ylim(0,10)+geom_boxplot()+facet_wrap(~typeCode,nrow = 3)
+
+###根据面积统计公建能耗情况
+data.raw.final$labelTypeLargeMonth<-paste(data.raw.final$typeCode,data.raw.final$isLarge,data.raw.final$month,sep = ".")
+nn<-boxplot(data=data.raw.final[DataSource=="CPLX"&eui>0],eui~typeCode+isLarge+month,outline=FALSE)
+stat.cplx.box<-data.table(nn$stats)
+names(stat.cplx.box)<-as.character(nn$names)
+stat.cplx.box$name<-c("lowerWhisker","lowerHinge","median","upperHinge","upperWhisker")
+stat.cplx.box<-melt(data=stat.cplx.box,id.vars = "name")
+stat.cplx.box$typeCode<-substr(stat.cplx.box$variable,1,1)
+stat.cplx.box.final<-stat.cplx.box[,.(
+  typeCode=typeCode[1],
+  sd=sd(data.raw.final[eui!=0&labelTypeLargeMonth==variable]$eui,na.rm = TRUE),
+  mean=mean(data.raw.final[eui!=0&labelTypeLargeMonth==variable]$eui,na.rm = TRUE),
+  #切记统计的是原始数据的平均值方差不是箱形图的！！！
+  lowerWhisker=value[name=="lowerWhisker"],
+  lowerHinge=value[name=="lowerHinge"],
+  median=value[name=="median"],
+  upperHinge=value[name=="upperHinge"],
+  upperWhisker=value[name=="upperWhisker"]
+),by=variable]
+#提取月份
+stat.cplx.box.final$variable<-as.character(stat.cplx.box.final$variable)
+stat.cplx.box.final$month<-matrix(data=unlist(strsplit(stat.cplx.box.final$variable,"\\.")),ncol = 3,byrow = TRUE)[,3]
+write.xlsx(x=stat.cplx.box.final,file="EUI_Monthly_CPLX_withDetail.xlsx")
 
 #按党政机关分类大型公建办公
 data.hashmap.party<-as.data.table(read.xlsx("partyBuildingHashMap.xlsx",sheetIndex = 1))
@@ -103,15 +116,47 @@ stat.building.summary<-data.raw.final[,.(typeCode=typeCode[1],
                                         meanArea=mean(area,na.rm = TRUE),
                                         maxArea=max(area,na.rm = TRUE),
                                         minArea=min(area,na.rm = TRUE)
-                                        # countSchoolA=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="A"])),
-                                        # countSchoolB=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="B"])),
-                                        # countSchoolC=length(unique(BuildingCode[DataSource=="Campus"&SchoolType=="C"])),
-                                        # countLarge=length(unique(BuildingCode[DataSource=="CPLX"&isLarge=="1"])),
-                                        # countNotLarge=length(unique(BuildingCode[DataSource=="CPLX"&isLarge=="0"]))
                                                      ),by=labelTypeDetail]
 write.xlsx(x=stat.building.summary,file = "All_BuildingSummary.xlsx")
 
-####箱形图统计####
+####全年能耗情况统计####
+#按年统计能耗情况
+data.raw.final$labelBuildingYearDetail<-paste(data.raw.final$BuildingCode,data.raw.final$year,data.raw.final$labelTypeDetail,sep = "_")
+data.building.selection<-data.raw.final[eui>0,.(count=length(BuildingCode)),by=labelBuildingYearDetail]
+data.raw.pickFullYear<-data.raw.final[labelBuildingYearDetail %in% unique(data.building.selection[count==12]$labelBuildingYearDetail)]
+data.all.annualSum<-data.raw.pickFullYear[eui!=0,.(BuildingCode=BuildingCode[1],
+                                                   DataSource=DataSource[1],
+                                                   labelTypeDetail=labelTypeDetail[1],
+                                                   typeCode=typeCode[1],
+                                                   year=year[1],
+                                                   annualEnergy=sum(value,na.rm = TRUE),
+                                                   area=area[1]),by=labelBuildingYearDetail]
+data.all.annualSum$annualEUI<-data.all.annualSum$annualEnergy/data.all.annualSum$area
+write.xlsx(x = data.all.annualSum,file = "EUI_Annual_BuildingWithDetail.xlsx")#原始数据，各栋情况
+#箱形图统计，整体分布情况
+nn<-boxplot(data=data.all.annualSum[DataSource=="CPLX"],annualEUI~labelTypeDetail,outline=FALSE,xlab="Type Code",ylab="Annual EUI (kWh/ m^2)")
+stat.cplx.annual.box<-data.table(nn$stats)
+names(stat.cplx.annual.box)<-as.character(nn$names)
+stat.cplx.annual.box$name<-c("lowerWhisker","lowerHinge","median","upperHinge","upperWhisker")
+stat.cplx.annual.box<-melt(data=stat.cplx.annual.box,id.vars = "name")
+stat.cplx.annual.box$typeCode<-substr(stat.cplx.annual.box$variable,1,1)
+stat.cplx.annual.box.final<-stat.cplx.annual.box[,.(
+  typeCode=typeCode[1],
+  count=length(unique(data.all.annualSum[labelTypeDetail==variable]$BuildingCode)),
+  sd=sd(data.all.annualSum[labelTypeDetail==variable]$annualEUI,na.rm = TRUE),
+  mean=mean(data.all.annualSum[labelTypeDetail==variable]$annualEUI,na.rm = TRUE),
+  #切记统计的是原始数据的平均值方差不是箱形图的！！！
+  lowerWhisker=value[name=="lowerWhisker"],
+  lowerHinge=value[name=="lowerHinge"],
+  median=value[name=="median"],
+  upperHinge=value[name=="upperHinge"],
+  upperWhisker=value[name=="upperWhisker"]
+),by=variable]
+write.xlsx(x = stat.cplx.annual.box.final,file = "EUI_Annual_AllTypeWithDetail.xlsx")
+#
+
+
+####逐月箱形图统计####
 nn<-boxplot(data = data.raw.final[eui!=0&typeCode=="D"],eui~month+typeCode,outline=FALSE)
 stat.raw<-data.table(nn$stats)
 names(stat.raw)<-as.character(nn$names)
@@ -124,7 +169,7 @@ stat.monthly.final$typeCode<-nn[,2]
 stat.monthly.final$variable<-NULL
 write.xlsx(x=stat.monthly.final,file="RAW_MonthlyStat.xlsx")
 
-####箱形图输出####
+####逐月箱形图输出####
 par(mfrow = c(2, 2))
 for(i in LETTERS[c(1:20)]){
   boxplot(data = data.raw.final[typeCode==i & eui!=0],eui~month,outline=FALSE,xlab="Month",ylab="EUI (kWh/ m^2)")
