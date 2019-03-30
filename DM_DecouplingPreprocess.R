@@ -84,9 +84,15 @@ data.hznu.use.room.day.period[is.na(finalState)&(modiSeason=="Summer"|modiSeason
 
 
 #?????需要确定聚类的分类，不同工况分开聚？不同季节分开聚？????
-list.hznu.room.use<-split(data.hznu.use.room.day.period,
-                          f=as.factor(paste(data.hznu.use.room.day.period$finalState,
-                                            data.hznu.use.room.day.period$modiSeason,sep = "_")))
+# list.hznu.room.use<-split(data.hznu.use.room.day.period,
+#                           f=as.factor(paste(data.hznu.use.room.day.period$finalState,
+#                                             data.hznu.use.room.day.period$modiSeason,sep = "_")))
+
+#更新一下仅教学
+list.hznu.room.use<-split(data.hznu.teaching.use[runtime>0 & runtime<15],
+                          f=as.factor(paste(data.hznu.teaching.use[runtime>0 & runtime<15]$finalState,
+                                            data.hznu.teaching.use[runtime>0 & runtime<15]$modiSeason,sep = "_")))
+
 list.hznu.room.use[["NA_Transition"]]<-NULL#过渡季缺失不能用
 
 
@@ -107,7 +113,7 @@ wssClusterEvaluate(data = data.use.room.tryCluster[, 7:22],
                    maxK = 15)
 pamkClusterEvaluate(
   data = data.use.room.tryCluster[, 7:22],#8-22时+runtime
-  criter = "ch",
+  criter = "multiasw",
   startK = 1,
   endK = 10
 )
@@ -115,34 +121,34 @@ pamkClusterEvaluate(
 kSize <- 5
 for(kSize in c(3:9)){
   pamk.best <-pamk(
-    data.use.room.tryCluster[, 7:22],
+    data.use.room.tryCluster[, 7:21],
     krange = kSize,
     criterion = "ch",
-    usepam = FALSE,
+    usepam = TRUE,
     critout = TRUE
   )#注意有缺失值的聚类结果将会是NA
 data.use.room.tryCluster$cluster<-pamk.best$pamobject$clustering
 data.use.room.tryCluster$isWorkday<-isWeekday(data.use.room.tryCluster$date)
 stat.use.room.cluster<-data.use.room.tryCluster[,.(
-  runtime=mean(runtime),
+  runtime=mean(runtime,na.rm = TRUE),
   count=length(labelRoomDay),
   workdayRatio=length(labelRoomDay[isWorkday==TRUE]),
   weekendRatio=length(labelRoomDay[isWorkday==FALSE]),
-  h8=mean(h8),
-  h9=mean(h9),
-  h10=mean(h10),
-  h11=mean(h11),
-  h12=mean(h12),
-  h13=mean(h13),
-  h14=mean(h14),
-  h15=mean(h15),
-  h16=mean(h16),
-  h17=mean(h17),
-  h18=mean(h18),
-  h19=mean(h19),
-  h20=mean(h20),
-  h21=mean(h21),
-  h22=mean(h22)
+  h8=mean(h8,na.rm = TRUE),
+  h9=mean(h9,na.rm = TRUE),
+  h10=mean(h10,na.rm = TRUE),
+  h11=mean(h11,na.rm = TRUE),
+  h12=mean(h12,na.rm = TRUE),
+  h13=mean(h13,na.rm = TRUE),
+  h14=mean(h14,na.rm = TRUE),
+  h15=mean(h15,na.rm = TRUE),
+  h16=mean(h16,na.rm = TRUE),
+  h17=mean(h17,na.rm = TRUE),
+  h18=mean(h18,na.rm = TRUE),
+  h19=mean(h19,na.rm = TRUE),
+  h20=mean(h20,na.rm = TRUE),
+  h21=mean(h21,na.rm = TRUE),
+  h22=mean(h22,na.rm = TRUE)
 ),by=cluster]
 setorder(stat.use.room.cluster,cluster)
 write.xlsx(data.table(stat.use.room.cluster,pamk.best$pamobject$clusinfo,
@@ -159,6 +165,8 @@ ggsave(
 )
 }
 
+####加载聚类模式名称及编码对应表####
+data.hznu.use.seasonMap<-as.data.table(read.xlsx2(file = "HZNU_ClusterMapping.xlsx",sheetIndex = 1))
 
 # list.behaviour.season 数据行为模式聚类已标记，全年模式统一
 ####正式聚类####
@@ -168,21 +176,18 @@ for(i in names(list.hznu.room.use)){
     list.hznu.room.use[[i]][,c(paste("h",c(8:22),sep = ""),"runtime")],
     krange = getkSizeBySeason(i),
     criterion = "ch",
-    usepam = FALSE,
+    usepam = TRUE,
     critout = TRUE
   )$pamobject$clustering
   # list.hznu.room.use[[i]]$clusterName<-mapply(getUsePatternName,i,list.hznu.room.use[[i]]$cluster)
   
   #根据各季节聚类对应编码转换为统一名称
-  list.hznu.room.use[[i]]$clusterName<-NULL
   list.hznu.room.use[[i]]$clusterName<-""
   for(j in unique(list.hznu.room.use[[i]]$cluster)){
     list.hznu.room.use[[i]][cluster==j,]$clusterName<-as.character(getUsePatternName(season= i,clusterNo = j))
   }
 }#其实用lapply更好
 
-View(list.hznu.room.use[[i]])
-data.hznu.use.seasonMap<-as.data.table(read.xlsx2(file = "HZNU_ClusterMapping.xlsx",sheetIndex = 1))
 
 
 ####热环境预处理数据处理####
@@ -240,7 +245,7 @@ miningBehaviourPattern<-function(data,colRange,seasonCol){
 getkSizeBySeason<-function(season){
   kSizeBySeason<-data.table(seasonMode=c("cooling_Summer","cooling_Summer_warm","cooling_Transition","heating_Transition",
                          "heating_Winter","heating_Winter_warm"),
-                         kSize=c(3,5,4,3,3,5))
+                         kSize=c(3,6,6,4,3,6))
   return(kSizeBySeason[seasonMode==season,2])
 }
 getUsePatternName<-function(season,clusterNo){

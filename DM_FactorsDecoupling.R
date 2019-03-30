@@ -16,22 +16,22 @@ boxplot(data = data.hznu.use.final,runtime~
 
 stat.use.clusterDescribe<-data.hznu.use.final[,.(
   count=length(labelRoomDay),
-  runtime=mean(runtime),
-  h8=mean(h8),
-  h9=mean(h9),
-  h10=mean(h10),
-  h11=mean(h11),
-  h12=mean(h12),
-  h13=mean(h13),
-  h14=mean(h14),
-  h15=mean(h15),
-  h16=mean(h16),
-  h17=mean(h17),
-  h18=mean(h18),
-  h19=mean(h19),
-  h20=mean(h20),
-  h21=mean(h21),
-  h22=mean(h22)
+  runtime=mean(runtime,na.rm = TRUE),
+  h8=mean(h8,na.rm = TRUE),
+  h9=mean(h9,na.rm = TRUE),
+  h10=mean(h10,na.rm = TRUE),
+  h11=mean(h11,na.rm = TRUE),
+  h12=mean(h12,na.rm = TRUE),
+  h13=mean(h13,na.rm = TRUE),
+  h14=mean(h14,na.rm = TRUE),
+  h15=mean(h15,na.rm = TRUE),
+  h16=mean(h16,na.rm = TRUE),
+  h17=mean(h17,na.rm = TRUE),
+  h18=mean(h18,na.rm = TRUE),
+  h19=mean(h19,na.rm = TRUE),
+  h20=mean(h20,na.rm = TRUE),
+  h21=mean(h21,na.rm = TRUE),
+  h22=mean(h22,na.rm = TRUE)
 ),by=clusterName]
 stat.use.clusterDescribe.plot<-melt(stat.use.clusterDescribe[,-c("count","runtime")],id.vars = c("clusterName"))
 ggplot(data = stat.use.clusterDescribe.plot,aes(x=variable,y=value,group=clusterName,color=clusterName,shape=clusterName))+geom_point()+geom_line()

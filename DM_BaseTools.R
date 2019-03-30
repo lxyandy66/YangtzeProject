@@ -80,9 +80,11 @@ wssClusterEvaluate <- function(data,
                                maxK = 20) {
   wss <-
     (nrow(data) - 1) * sum(apply(data, 2, var))
-  for (i in 1:maxK)
+  for (i in 1:maxK){
     wss[i] <-
       sum(kmeans(data, centers = i, iter.max = maxIter)$withinss)
+    cat(i,"  clusters  ",wss[i],"\n")
+    }
   plot(1:maxK,
        wss,
        type = "o",
