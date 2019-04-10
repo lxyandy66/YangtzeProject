@@ -19,6 +19,8 @@ library(caret)
 library(rattle)
 library(pROC)
 library(rgl)
+library(RODBC)
+library(RMySQL)
 
 ####预处理部分####
 getMode <- function(x) {
@@ -204,5 +206,15 @@ getMAE<-function(yPred,yLook){
 }
 getMaxPredictError<-function(yPred,yLook){
   return(max(abs((yLook-yPred)/yLook)))
+}
+
+####获取分割字符串后各成员####
+getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
+  nn<-unlist(strsplit(x,split = splitSimbol))
+  if(!isLastOne){
+    return(nn[index])
+  }else{
+    return(nn[length(nn)])
+  }
 }
 
