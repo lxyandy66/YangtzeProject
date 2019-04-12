@@ -34,7 +34,7 @@ data.curriculum.raw$endTime<-sapply(data.curriculum.raw$time,getSplitMember,spli
 
 
 ####获取数据库中教室内热环境数据和空调用电数据####
-conn<-dbConnect(MySQL(),dbname="zdacp-01",user="root",password="Kamarov",host="localhost")
+conn<-dbConnect(MySQL(),dbname="zdacp-01",user="root",password="",host="localhost")
 dbListTables(conn)#查看table
 dbSendQuery(conn,'SET NAMES utf8')#设置数据库读取编码格式为utf-8
 # connect<-odbcConnect("zdacp-01",uid = "root",pwd = "",DBMSencoding="utf8")#mac下就不用odbc了
@@ -48,13 +48,33 @@ data.zju.env.raw<-data.zju.env.raw[,c("date_time","build_code","room_code","temp
 data.zju.env.raw$date<-substr(data.zju.env.raw$date_time,1,10)
 # ggplot(data=data.zju.env.raw[date=="2018-04-14"& room_code=="330100D284305"],aes(x=date_time,y=temp,group=date))+geom_line()  
   
+
+####时间轴处理，统一为10分钟间隔####
+data.zju.energy.raw$datetime<-as.POSIXct(data.zju.energy.raw$begin,formate="%Y-%m-%d %H:%M:%OS")
+data.zju.env.raw$datetime<-as.POSIXct(data.zju.env.raw$date_time,formate="%Y-%m-%d %H:%M:%OS")
+nn<-data.zju.env.raw[,.(
+  count=length(build_code)
+),by=substr(data.zju.env.raw$modiTime,11,16)]#时间轴都存在有问题的
+#标签统一为 baseLabel: 时间）_房间号
+data.zju.energy.raw$modiTime<-paste(substr(data.zju.energy.raw$datetime,1,15),"0:00",sep = "")
+data.zju.env.raw$modiTime<-paste(substr(data.zju.env.raw$datetime,1,15),"0:00",sep = "")
+data.zju.thermo.rawProcess$modiTime<-paste(substr(data.zju.thermo.rawProcess$date_time,1,15),"0:00",sep = "")
+
+data.zju.env.raw$baseLabel<-paste(data.zju.env.raw$modiTime,data.zju.env.raw$room_code,sep = "_")
+data.zju.thermo.rawProcess$baseLabel<-paste(data.zju.thermo.rawProcess$modiTime,
+                                            data.zju.thermo.rawProcess$room_code,sep = "_")
+data.zju.energy.raw$roomCode<-substr(data.zju.energy.raw$ac_code,1,13)
+data.zju.energy.raw$total_elec<-abs(as.numeric(data.zju.energy.raw$total_elec))
+data.zju.energy.raw[total_elec>100]$total_elec<-1#只有14条
+data.zju.energy.raw$baseLabel<-paste(data.zju.energy.raw$modiTime,data.zju.energy.raw$roomCode,sep = "_")
+data.zju.energy.raw$labelTimeAc<-paste(data.zju.energy.raw$modiTime,data.zju.energy.raw$ac_code,sep = "_")
+
 ####基于教室空调使用数据，合并其他参数####
-# baseLabel: 时间_房间号
+#
 ####对已经清洗的数据再进行预处理####
 #去重复，有部分时间点相同但有两个记录的情况
 # 同一时刻两点温度相差2度以内取平均值，否则取小值，似乎整体偏大
-data.zju.thermo.rawProcess$baseLabel<-paste(data.zju.thermo.rawProcess$date_time,
-                                            data.zju.thermo.rawProcess$room_code,sep = "_")
+
 data.zju.thermo.rawProcess<-data.zju.thermo.rawProcess[!duplicated(data.zju.thermo.rawProcess)]
 length(unique(data.zju.thermo.rawProcess$baseLabel))#438958,总长442199
 nn<-data.zju.thermo.rawProcess[!duplicated(data.zju.thermo.rawProcess$baseLabel)]
@@ -69,27 +89,23 @@ data.zju.thermo<-data.zju.thermo.rawProcess[,.(
                   min(humidity,na.rm = TRUE),mean(humidity,na.rm = TRUE))
 ),by=baseLabel]
 data.zju.thermo$modiTemp<-data.zju.thermo$temp
+length(unique(data.zju.thermo$baseLabel))
 
-data.zju.env.raw$datetime<-as.POSIXct(data.zju.env.raw$date_time,formate="%Y-%m-%d %H:%M:%OS")
-data.zju.env.raw$baseLabel<-paste(data.zju.env.raw$datetime,data.zju.env.raw$room_code,sep = "_")
+
 # 合并原预处理（预处理对吗...）到data.zju.env.raw
-
 # nn<-data.zju.env.raw[duplicated(data.zju.env.raw$baseLabel)]
 # nn1<-data.zju.env.raw[baseLabel%in% nn$baseLabel]#从数据库里拉出来的没毛病
-length(unique(data.zju.env.raw$baseLabel))#290911
+length(unique(data.zju.env.raw$baseLabel))#290901
 data.zju.env.raw<-merge(x=data.zju.env.raw,y=data.zju.thermo[,c("baseLabel","modiTemp")],all.x = TRUE,by.x = "baseLabel",by.y = "baseLabel")
 data.zju.env.raw<-data.zju.env.raw[!duplicated(data.zju.env.raw)]
-
+nn<-data.zju.env.raw[duplicated(data.zju.env.raw$baseLabel)]
+nn1<-data.zju.env.raw[baseLabel %in% nn$baseLabel]#看看重复情况：多出来10条，温度湿度都为0
 ####处理能耗数据####
-data.zju.energy.raw$datetime<-as.POSIXct(data.zju.energy.raw$begin,formate="%Y-%m-%d %H:%M:%OS")
 #噫这张表居然还是到末端的
-data.zju.energy.raw$roomCode<-substr(data.zju.energy.raw$ac_code,1,13)
-data.zju.energy.raw$total_elec<-abs(as.numeric(data.zju.energy.raw$total_elec))
-data.zju.energy.raw$baseLabel<-paste(data.zju.energy.raw$datetime,data.zju.energy.raw$roomCode,sep = "_")
+
 #清洗重复数据
-data.zju.energy.raw$labelTimeAc<-paste(data.zju.energy.raw$datetime,data.zju.energy.raw$ac_code,sep = "_")
 data.zju.energy.raw<-data.zju.energy.raw[!duplicated(data.zju.energy.raw)]
-length(unique(data.zju.energy.raw$labelTimeAc))#617680 总长637369
+length(unique(data.zju.energy.raw$labelTimeAc))#617635 总长637369
 nn<-data.zju.energy.raw[duplicated(data.zju.energy.raw$labelTimeAc)]
 nn1<-data.zju.energy.raw[labelTimeAc %in% nn$labelTimeAc]#看看重复情况
 #nn2对应原始数据中不存在重复的记录点
@@ -99,7 +115,7 @@ nn2<-data.zju.energy.raw[!labelTimeAc %in% nn$labelTimeAc,.(
   total_elec=total_elec[1]
   # range=range(total_elec)[2]-range(total_elec)[1]
 ),by=labelTimeAc]#分析一下重复的情况
-ggplot(nn2[total_elec!=0],aes(x=total_elec))+geom_density()+xlim(0,1)#597991条仅有39条大于1
+ggplot(nn2[total_elec!=0],aes(x=total_elec))+geom_density()+xlim(0,1)#597909条仅有53条大于1
 boxplot(x=nn2[!is.na(total_elec)&total_elec!=0]$total_elec)
 #nn3对应有重复记录中，同一时刻的重复记录的极差
 nn3<-nn1[,.(baseLabel=baseLabel[1],
@@ -113,16 +129,15 @@ data.zju.energy.cleaned<-data.zju.energy.raw[,.(
   datetime=datetime[1],
   ac_code=ac_code[1],
   roomCode=roomCode[1],
-  total_elec=ifelse((range(total_elec,na.rm = TRUE)[2]-range(total_elec,na.rm = TRUE)[1])>=1,
+  total_elec=mean(total_elec,na.rm = TRUE),
+  modiElec=ifelse((range(total_elec,na.rm = TRUE)[2]-range(total_elec,na.rm = TRUE)[1])>=1,
                     range(total_elec,na.rm = TRUE)[1],mean(total_elec,na.rm = TRUE))
 ),by=labelTimeAc]
-ecLim<-mean(data.zju.energy.cleaned[total_elec!=0]$total_elec,na.rm = TRUE)+
-  3*sd(data.zju.energy.cleaned[total_elec!=0]$total_elec,na.rm = TRUE)
+ecLim<-mean(data.zju.energy.cleaned[modiElec!=0]$modiElec,na.rm = TRUE)+
+  3*sd(data.zju.energy.cleaned[modiElec!=0]$modiElec,na.rm = TRUE)
 # 大于3sigma仅占113/617680
-ggplot(data = data.zju.energy.cleaned[total_elec!=0],aes(x=total_elec))+geom_density()#+xlim(0,ecLim)
+ggplot(data = data.zju.energy.cleaned[modiElec!=0],aes(x=modiElec))+geom_density()#+xlim(0,ecLim)
 boxplot(data.zju.energy.cleaned[total_elec!=0]$total_elec,outline = FALSE)
-# 再对大于2的放缩一下（？
-data.zju.energy.cleaned$modiElec<-data.zju.energy.cleaned$total_elec
 data.zju.energy.cleaned[total_elec>ecLim]$modiElec<-ecLim+(data.zju.energy.cleaned[total_elec>ecLim]$total_elec-ecLim)/10
 
 data.zju.energy.room.raw<-data.zju.energy.cleaned[,.(
@@ -140,6 +155,14 @@ boxplot(x=data.zju.energy.room.raw[modiElec>0]$modiElec)
 data.zju.combine.raw<-merge(x=data.zju.energy.room.raw[,c("baseLabel","datetime","roomCode","total_elec","modiElec")],
                             y=data.zju.env.raw[,c("baseLabel","temp","humidity","modiTemp")],
                             all.x = TRUE,by.x ="baseLabel",by.y ="baseLabel")
+
+####增加学期、课程等标签####
+data.zju.combine.raw$date<-substr(data.zju.combine.raw$baseLabel,1,10)
+data.calendar.raw$date<-as.character(data.calendar.raw$date)
+data.zju.combine.raw<-merge(x=data.zju.combine.raw,y=data.calendar.raw,all.x = TRUE,by= "date")
+
+data.zju.combine.raw$time<-format(data.zju.combine.raw$datetime,format = "%H:%M")
+read.xlsx()
 
 
 
