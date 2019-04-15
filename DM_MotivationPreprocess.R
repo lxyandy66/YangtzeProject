@@ -96,7 +96,8 @@ length(unique(data.zju.thermo$baseLabel))
 # nn<-data.zju.env.raw[duplicated(data.zju.env.raw$baseLabel)]
 # nn1<-data.zju.env.raw[baseLabel%in% nn$baseLabel]#从数据库里拉出来的没毛病
 length(unique(data.zju.env.raw$baseLabel))#290901
-data.zju.env.raw<-merge(x=data.zju.env.raw,y=data.zju.thermo[,c("baseLabel","modiTemp")],all.x = TRUE,by.x = "baseLabel",by.y = "baseLabel")
+data.zju.env.raw<-merge(x=data.zju.env.raw,y=data.zju.thermo[,c("baseLabel","modiTemp")],
+                        all.x = TRUE,by.x = "baseLabel",by.y = "baseLabel")
 data.zju.env.raw<-data.zju.env.raw[!duplicated(data.zju.env.raw)]
 nn<-data.zju.env.raw[duplicated(data.zju.env.raw$baseLabel)]
 nn1<-data.zju.env.raw[baseLabel %in% nn$baseLabel]#看看重复情况：多出来10条，温度湿度都为0
@@ -148,7 +149,7 @@ data.zju.energy.room.raw<-data.zju.energy.cleaned[,.(
   total_elec=sum(total_elec,na.rm = TRUE),
   modiElec=sum(modiElec,na.rm = TRUE)
 ),by=baseLabel]
-ggplot(data = data.zju.energy.room.raw[modiElec!=0],aes(x=modiElec))+geom_density()
+ggplot(data = data.zju.energy.room.raw[modiElec!=0],aes(x=modiElec))+geom_density()+xlim(0,0.025)#+scale_x_continuous(breaks = seq(from=0,to=0.03,by=0.005))
 boxplot(x=data.zju.energy.room.raw[modiElec>0]$modiElec)
 
 ####合并热环境到电耗表####
@@ -160,9 +161,64 @@ data.zju.combine.raw<-merge(x=data.zju.energy.room.raw[,c("baseLabel","datetime"
 data.zju.combine.raw$date<-substr(data.zju.combine.raw$baseLabel,1,10)
 data.calendar.raw$date<-as.character(data.calendar.raw$date)
 data.zju.combine.raw<-merge(x=data.zju.combine.raw,y=data.calendar.raw,all.x = TRUE,by= "date")
-
 data.zju.combine.raw$time<-format(data.zju.combine.raw$datetime,format = "%H:%M")
-read.xlsx()
 
+#课程、周、学期等标签的添加
+data.zju.schedule.raw<-read.xlsx(file="ZJU_CourseSchedule.xlsx",sheetIndex = 1)
+data.zju.schedule.raw$originTime<-data.zju.schedule.raw$time
+data.zju.schedule.raw$time<-format(data.zju.schedule.raw$originTime,format = "%H:%M")
+data.zju.combine.raw<-merge(x=data.zju.combine.raw,y=data.zju.schedule.raw[,c("time","hasClass","detail","classNo")],
+                            all.x = TRUE,by.x="time",by.y="time")
+data.zju.combine.raw$detail<-as.character(data.zju.combine.raw$detail)
+data.zju.combine.raw$dateStr<-format(data.zju.combine.raw$datetime,format = "%Y-%m-%d")
+data.zju.combine.raw<-merge(x=data.zju.combine.raw,y=data.calendar.raw,all.x=TRUE,by.x = "dateStr",by.y = "date")
+
+#添加对应课程属性
+data.curriculum.raw$fullSemester<-paste(data.curriculum.raw$year,data.curriculum.raw$semester,sep = "_")
+#不用for用sapply还有什么别的呢
+
+#将课程标签对应到逐时的时间轴中
+data.zju.combine.raw$lessonCode<-""
+for(i in 1:length(data.curriculum.raw$lessonCode)){
+  #1709,还好 #不行还是慢了
+  #定义每周的序列
+  weekVector<-data.curriculum.raw[i]$startWeek:data.curriculum.raw[i]$endWeek
+  if(data.curriculum.raw[i]$weekType %in% c("full","temp")){
+    weekTypeVector<-weekVector
+  }else if(data.curriculum.raw[i]$weekType=="single"){
+    weekTypeVector<-weekVector[weekVector %%2==0]-1
+  }else if(data.curriculum.raw[i]$weekType=="double"){
+    weekTypeVector<-weekVector[weekVector %%2==0]
+  }
+  # weekTypeVector<-ifelse(FALSE,weekVector[],weekVector[]+11)#为啥不行
+  
+  #定义课程序列
+  lessonVector<-c(data.curriculum.raw[i]$startTime:data.curriculum.raw[i]$endTime)
+  data.zju.combine.raw[semester==data.curriculum.raw[i]$fullSemester&
+                         week %in% weekTypeVector&
+                         weekday==data.curriculum.raw[i]$weekday&
+                         classNo %in% lessonVector]$lessonCode<-data.curriculum.raw[i]$lessonCode
+}
+
+####根据课程编码合并课程相关信息####
+data.zju.combine.final<-merge(x=data.zju.combine.raw,
+                              y=data.curriculum.raw[,c("lessonCode","studentType","studentNum","weekType")],
+                              all.x = TRUE,by.x="lessonCode",by.y="lessonCode")
+
+####开关机状态清洗####
+length(data.zju.combine.final[total_elec!=0&total_elec<=0.015]$total_elec)/
+  length(data.zju.combine.final[total_elec!=0]$total_elec)
+ecLim<-0.015
+# > length(data.zju.combine.final[total_elec!=0&total_elec<=0.015]$total_elec)/
+#   +   length(data.zju.combine.final[total_elec!=0]$total_elec)
+# [1] 0.3274574
+# > length(data.zju.combine.final[total_elec!=0&total_elec<=0.05]$total_elec)/
+#   +   length(data.zju.combine.final[total_elec!=0]$total_elec)
+# [1] 0.4016175
+
+data.zju.combine.final$on_off<- 0
+data.zju.combine.final[total_elec>=ecLim]$on_off<-1
+
+#预处理完成
 
 
