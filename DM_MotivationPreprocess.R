@@ -161,7 +161,7 @@ data.zju.combine.raw<-merge(x=data.zju.energy.room.raw[,c("baseLabel","datetime"
 data.zju.combine.raw$date<-substr(data.zju.combine.raw$baseLabel,1,10)
 data.calendar.raw$date<-as.character(data.calendar.raw$date)
 data.zju.combine.raw<-merge(x=data.zju.combine.raw,y=data.calendar.raw,all.x = TRUE,by= "date")
-data.zju.combine.raw$time<-format(data.zju.combine.raw$datetime,format = "%H:%M")
+data.zju.combine.raw$time<-substr(data.zju.combine.raw$baseLabel,12,16)##！！！注意统一时间轴的问题
 
 #课程、周、学期等标签的添加
 data.zju.schedule.raw<-read.xlsx(file="ZJU_CourseSchedule.xlsx",sheetIndex = 1)
@@ -206,8 +206,8 @@ data.zju.combine.final<-merge(x=data.zju.combine.raw,
                               all.x = TRUE,by.x="lessonCode",by.y="lessonCode")
 
 ####开关机状态清洗####
-length(data.zju.combine.final[total_elec!=0&total_elec<=0.015]$total_elec)/
-  length(data.zju.combine.final[total_elec!=0]$total_elec)
+length(data.zju.combine.final[modiElec!=0&modiElec<=0.015]$modiElec)/
+  length(data.zju.combine.final[modiElec!=0]$modiElec)
 ecLim<-0.015
 # > length(data.zju.combine.final[total_elec!=0&total_elec<=0.015]$total_elec)/
 #   +   length(data.zju.combine.final[total_elec!=0]$total_elec)
@@ -217,8 +217,11 @@ ecLim<-0.015
 # [1] 0.4016175
 
 data.zju.combine.final$on_off<- 0
-data.zju.combine.final[total_elec>=ecLim]$on_off<-1
+data.zju.combine.final[modiElec>=ecLim]$on_off<-1
 
 #预处理完成
+save(data.zju.combine.final,data.calendar.raw,data.curriculum.raw,data.zju.energy.cleaned,
+     data.zju.env.raw,data.zju.schedule.raw,
+     file="ZJU_驱动因素_课表能耗热环境全_预处理完成.rdata")
 
 
