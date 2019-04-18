@@ -16,7 +16,8 @@ data.zju.motivation.raw[hasClass!=1&detail=="class"]$actualDetail<-"noClass"
 ####基本统计####
 length(data.zju.motivation.raw[on_off==1&lessonCode!=""]$baseLabel)/
   length(data.zju.motivation.raw[on_off==1]$baseLabel)
-
+length(data.zju.motivation.raw[on_off==1&week]$baseLabel)/
+  length(data.zju.motivation.raw[on_off==1]$baseLabel)
 
 
 data.zju.motivation.raw$semester<-as.character(data.zju.motivation.raw$semester)
@@ -26,6 +27,8 @@ data.zju.motivation.raw$hour<-substr(data.zju.motivation.raw$baseLabel,12,13)
 data.zju.motivation.raw$labelSemeOnOff<-paste(data.zju.motivation.raw$on_off,data.zju.motivation.raw$simpleSemester,sep = "_")
 
 #各季节是否使用空调的热环境
+ggplot(data=data.zju.motivation.raw[temp!=modiTemp],aes(x=hour,y=modiTemp))+
+  geom_point(position = "jitter",color="darkgreen")+geom_point(aes(x=hour,y=temp),color="orange",position = "jitter")
 ggplot(data=data.zju.motivation.raw,aes(x=modiTemp,color=simpleSemester,fill=on_off,linetype=hasClass))+
   geom_density(alpha=0.3)
 #各时间段的使用概率

@@ -69,39 +69,15 @@ data.zju.thermo <- data.zju.thermo[deleteFlag == 0]
 #效果不好
 
 ##平均值偏移对数据进行修正
-#效果还行...
 data.zju.thermo$outerFlag <- "0"
+data.zju.thermo$modiTemp<-data.zju.thermo$temp
+#考虑开机情况修正
 for (i in unique(data.zju.thermo$room_code)) {
   for (j in unique(data.zju.thermo[room_code == i]$month)) {
     #逐房间逐月进行计算
     data.modify <- data.zju.thermo[room_code == i & month == j]
     data.zju.thermo[room_code == i & month == j]$deleteFlag <- 1
-    for (k in c(
-      "00",
-      "01",
-      "02",
-      "03",
-      "04",
-      "05",
-      "06",
-      "07",
-      "08",
-      "09",
-      "10",
-      "11",
-      "12",
-      "13",
-      "14",
-      "15",
-      "16",
-      "17",
-      "18",
-      "19",
-      "20",
-      "21",
-      "22",
-      "23"
-    )) {
+    for (k in sprintf("%02d",0:23)) {
       #逐小时计算
       boxStats <- boxplot.stats(data.modify[hour == k]$temp)
       originTarget <- boxStats$stats[4]#用箱型图的箱上界作为偏移量的基准
