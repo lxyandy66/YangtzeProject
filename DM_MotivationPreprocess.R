@@ -219,8 +219,16 @@ ecLim<-0.015
 data.zju.combine.final$on_off<- 0
 data.zju.combine.final[modiElec>=ecLim]$on_off<-1
 
+####清洗掉一些异常的数据####
+data.zju.combine.final$labelRoomDate<-paste(data.zju.combine.final$roomCode,data.zju.combine.final$dateStr,sep = "_")
+data.zju.fullCheck<-data.zju.combine.final[,.(countAll=length(baseLabel),
+                                         countOn=sum(on_off,na.rm = TRUE)),
+                                         by=labelRoomDate]
+data.zju.combine.final.cleaned<-data.zju.combine.final[labelRoomDate %in% data.zju.fullCheck[countOn!=144]$labelRoomDate]
+
 #预处理完成
-save(data.zju.combine.final,data.calendar.raw,data.curriculum.raw,data.zju.energy.cleaned,
+save(data.zju.combine.final,data.zju.combine.final.cleaned,
+     data.calendar.raw,data.curriculum.raw,data.zju.energy.cleaned,
      data.zju.env.raw,data.zju.schedule.raw,
      file="ZJU_驱动因素_课表能耗热环境全_预处理完成.rdata")
 

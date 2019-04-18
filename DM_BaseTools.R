@@ -1,5 +1,26 @@
 ####该脚本用于课题分析中通用型参数的处理及部分函数加载####
-a
+library(data.table)
+library(fpc)
+library(cluster)
+library(ggplot2)
+library(ggradar)
+library(knitr)
+library(psych)
+library(plyr)
+library(timeDate)
+library(rJava)
+library(xlsx)
+library(reshape2)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(caret)
+library(rattle)
+library(pROC)
+library(rgl)
+library(RODBC)
+library(RMySQL)
 
 ####预处理部分####
 getMode <- function(x) {
