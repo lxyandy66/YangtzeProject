@@ -89,6 +89,7 @@ data.hznu.use.room.day.period[is.na(finalState)&(modiSeason=="Summer"|modiSeason
 #                                             data.hznu.use.room.day.period$modiSeason,sep = "_")))
 
 #更新一下仅教学
+# data.hznu.teaching.use[runtime>0 & runtime<15] #符合该条件教学建筑全年仅20445条
 list.hznu.room.use<-split(data.hznu.teaching.use[runtime>0 & runtime<15],
                           f=as.factor(paste(data.hznu.teaching.use[runtime>0 & runtime<15]$finalState,
                                             data.hznu.teaching.use[runtime>0 & runtime<15]$modiSeason,sep = "_")))

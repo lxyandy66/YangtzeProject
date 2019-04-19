@@ -95,11 +95,28 @@ data.hznu.energy.room.day<-
         by = "labelRoomDay",all.x = TRUE)
 data.hznu.energy.room.day[sumElec==0]$basePattern<-"noneUse"
 data.hznu.energy.room.day$zeroCount<-apply(data.hznu.energy.room.day[,c(6:20)],1,function(x){sum(x==0)})
-data.hznu.energy.room.day[is.na(basePattern)]$basePattern<-ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==15,"noneUse",
-                                                                  ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==0,"fullUse","periodUse"))
+data.hznu.energy.room.day[is.na(basePattern)]$basePattern<-
+  ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==15,"noneUse",
+         ifelse(data.hznu.energy.room.day[is.na(basePattern)]$zeroCount==0,"fullUse","periodUse"))
 nn<-data.hznu.energy.room.day[which(rowSums(is.na(data.hznu.energy.room.day))>0),]#行为finalState及basePattern缺失83781条
 
 # save(data.hznu.energy.room.day,data.hznu.energy.ac.hourly,
 #      file = "HZNU_能耗聚类预处理结果_仅工作时间_按原始修正能耗.rdata")
+
+
+####接仅教学能耗数据集####
+####增加基本使用模式标签####
+# basePattern={"noneUSe","periodUse","fullUse"}
+data.hznu.teaching.energy.final<-
+  merge(x=data.hznu.teaching.energy,y=data.hznu.use.final[,c("labelRoomDay","finalState","basePattern","clusterName")],
+        by = "labelRoomDay",all.x = TRUE)
+data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[sumElec!=0]
+nn<-data.hznu.teaching.energy.final[which(rowSums(is.na(data.hznu.teaching.energy.final))>0),]#行为finalState及basePattern缺失1787条
+ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay],aes(x=sumElec))+geom_density()
+data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],MARGIN = 1,sd,na.rm=TRUE)#sapply为啥不对
+data.hznu.teaching.energy.final$meanElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],MARGIN = 1,mean,na.rm=TRUE)
+
+
+
 
 
