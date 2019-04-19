@@ -113,8 +113,17 @@ data.hznu.teaching.energy.final<-
 data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[sumElec!=0]
 nn<-data.hznu.teaching.energy.final[which(rowSums(is.na(data.hznu.teaching.energy.final))>0),]#行为finalState及basePattern缺失1787条
 ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay],aes(x=sumElec))+geom_density()
-data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],MARGIN = 1,sd,na.rm=TRUE)#sapply为啥不对
-data.hznu.teaching.energy.final$meanElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],MARGIN = 1,mean,na.rm=TRUE)
+data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+                                              MARGIN = 1,sd,na.rm=TRUE)#sapply为啥不对
+data.hznu.teaching.energy.final$meanElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+                                                MARGIN = 1,mean,na.rm=TRUE)
+wssClusterEvaluate(data = data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec")],
+                   maxIter = 1000,maxK = 8)
+pamkClusterEvaluate(
+  data = data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec")],
+  criter = "ch",startK = 2,endK = 8)
+
+
 
 
 
