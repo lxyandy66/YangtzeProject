@@ -71,5 +71,5 @@ symnum(cor(data.zju.motivation.raw[,c("on_off","modiTemp","humidity","isWeekend"
            use = "complete.obs",method = "spearman"))
 
 ####Logistic»Ø¹é####
-fit<-glm(on_off~actualDetail+hasClass+modiTemp+humidity,data=data.zju.motivation.raw,family = binomial())
+fit<-glm(on_off~hasClass+modiTemp+humidity,data=data.zju.motivation.raw,family = binomial(),na.action = na.omit)
 summary(fit)

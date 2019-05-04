@@ -21,6 +21,8 @@ library(pROC)
 library(rgl)
 library(RODBC)
 library(RMySQL)
+library(factoextra)
+library(NbClust)
 
 ####预处理部分####
 getMode <- function(x) {
@@ -135,15 +137,13 @@ gapClusterEvaluate <- function(data, kMax = 15, b = 10) {
 }
 
 #多指标法
-multiplyClusterEvaluate <- function(data) {
-  library(factoextra)
-  library(ggplot2)
+multiplyClusterEvaluate <- function(data,methodSelected="wss") {
   fviz_nbclust(
     data,
     kmeans,
-    method = "silhouette",
-    k.max = 15,
-    diss = dist(data, method = "binary")
+    method = methodSelected,
+    k.max = 10,
+    diss = dist(data)
   )
 }
 # 错误: 矢量内存用完了(达到了极限?)，这个方法不行

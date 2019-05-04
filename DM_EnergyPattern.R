@@ -108,24 +108,77 @@ nn<-data.hznu.energy.room.day[which(rowSums(is.na(data.hznu.energy.room.day))>0)
 ####增加基本使用模式标签####
 # basePattern={"noneUSe","periodUse","fullUse"}
 data.hznu.teaching.energy.final<-
-  merge(x=data.hznu.teaching.energy,y=data.hznu.use.final[,c("labelRoomDay","finalState","basePattern","clusterName")],
+  merge(x=data.hznu.teaching.energy,y=data.hznu.use.final[,c("labelRoomDay","finalState","basePattern","clusterName","runtime")],
         by = "labelRoomDay",all.x = TRUE)
 data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[sumElec!=0]
 nn<-data.hznu.teaching.energy.final[which(rowSums(is.na(data.hznu.teaching.energy.final))>0),]#行为finalState及basePattern缺失1787条
-ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay],aes(x=sumElec))+geom_density()
+ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay],aes(x=sumElec))+geom_density()+xlim(0,150)
+
 data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
-                                              MARGIN = 1,sd,na.rm=TRUE)#sapply为啥不对
-data.hznu.teaching.energy.final$meanElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
-                                                MARGIN = 1,mean,na.rm=TRUE)
-wssClusterEvaluate(data = data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec")],
+                                              MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
+data.hznu.teaching.energy.final$meanElec<-
+  data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$runtime
+data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$meanElec/data.hznu.teaching.energy.final$acCount
+#对于单台空调能耗设上限
+ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
+  3*sd(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)
+#apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],MARGIN = 1,mean,na.rm=TRUE)#不应该用这个
+data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[!is.na(runtime)]
+ggplot(data=data.hznu.teaching.energy.final,aes(x=meanAcElec))+geom_density()+xlim(0,ecLim)
+
+####能耗数据的归一化处理####
+#使用z-score算法零-均值标准化
+data.hznu.teaching.energy.std<-data.hznu.teaching.energy.final[sumElec<=150&meanAcElec<=ecLim]
+temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("h%d",8:22))],center = FALSE))
+names(temp.std)<-sprintf("stdH%d",8:22)
+temp.std$stdSumElec<-scale(data.hznu.teaching.energy.std$sumElec,center = FALSE)
+temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)
+temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)
+temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)
+temp.std$stdMeanAcElec<-scale(data.hznu.teaching.energy.std$meanAcElec,center = FALSE)
+data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,temp.std)
+ggplot(data=data.hznu.teaching.energy.std,aes(x=stdMeanAcElec))+geom_density()
+
+# data.hznu.energy.tryCluster<-data.hznu.teaching.energy.final[finalState=="cooling"&sumElec<=150,c("sdElec","meanElec","sumElec","runtime")]
+data.hznu.energy.tryCluster<-data.hznu.teaching.energy.std[finalState=="cooling"]#,"meanElec","sumElec","runtime")]
+wssClusterEvaluate(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
                    maxIter = 1000,maxK = 8)
 pamkClusterEvaluate(
-  data = data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec")],
+  data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
   criter = "ch",startK = 2,endK = 8)
-
-
-
-
+multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
+# stat.energy.bestK<-NbClust(data=data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec","runtime")],
+#                            min.nc = 2,max.nc = 4,method = "kmeans")#内存不够
+#3或4类
+####分类法一####
+#直接按照总体特征进行分类
+# for(i in 3:6)
+energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
+                  krange = 7,criterion = "ch",critout = TRUE,usepam = TRUE)
+energy.pamk
+data.hznu.energy.tryCluster$energyCluster<-energy.pamk$pamobject$clustering
+# data.hznu.energy.tryCluster$sdElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],
+#                                               MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
+# data.hznu.energy.tryCluster$sumElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],MARGIN = 1,FUN = sum,na.rm=TRUE)
+stat.hznu.energy.tryCluster.descri<-data.hznu.energy.tryCluster[,.(
+  runtime=mean(runtime,na.rm = TRUE),
+  sumElec=mean(sumElec,na.rm = TRUE),
+  sdElec=sd(sumElec,na.rm = TRUE),
+  meanElec=mean(meanElec,na.rm = TRUE)
+),by=energyCluster]
+ggplot(data=stat.hznu.energy.tryCluster.descri,aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point()
+stat.hznu.energy.tryCluster<-aggregate
+####根据行为模式统计能耗情况####
+stat.hznu.energy.byUsage<-data.hznu.teaching.energy.final[,.(
+  runtime=mean(runtime,na.rm = TRUE),
+  sumElec=mean(sumElec,na.rm = TRUE),
+  sdElec=mean(sdElec,na.rm = TRUE),
+  meanElec=mean(meanElec,na.rm = TRUE)
+),by=clusterName]
+aggregate(data.hznu.teaching.energy.final[,"sumElec"],
+          by = list(usageCluster=data.hznu.teaching.energy.final$clusterName,
+                    acMode=data.hznu.teaching.energy.final$finalState),FUN = boxplot.stats)#,na.action=na.omit)
+ggplot(data=data.hznu.teaching.energy.final[acCount==1],aes(x=runtime,y=sumElec,group=runtime))+geom_boxplot()
 
 
 
