@@ -152,22 +152,34 @@ multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 #3或4类
 ####分类法一####
 #直接按照总体特征进行分类
-# for(i in 3:6)
+for(i in 3:6){
 energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
-                  krange = 7,criterion = "ch",critout = TRUE,usepam = TRUE)
-energy.pamk
+                  krange = i,criterion = "ch",critout = TRUE,usepam = TRUE)
+# energy.pamk
 data.hznu.energy.tryCluster$energyCluster<-energy.pamk$pamobject$clustering
 # data.hznu.energy.tryCluster$sdElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],
 #                                               MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
 # data.hznu.energy.tryCluster$sumElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],MARGIN = 1,FUN = sum,na.rm=TRUE)
-stat.hznu.energy.tryCluster.descri<-data.hznu.energy.tryCluster[,.(
+stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
   runtime=mean(runtime,na.rm = TRUE),
   sumElec=mean(sumElec,na.rm = TRUE),
   sdElec=sd(sumElec,na.rm = TRUE),
   meanElec=mean(meanElec,na.rm = TRUE)
 ),by=energyCluster]
-ggplot(data=stat.hznu.energy.tryCluster.descri,aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point()
-stat.hznu.energy.tryCluster<-aggregate
+stat.hznu.energy.tryCluster<-describeBy(x = data.hznu.energy.tryCluster[,c("meanAcElec","meanElec","sumElec")],
+                                        group = list(usageCluster=data.hznu.energy.tryCluster$clusterName,
+                                                     energyCluster=data.hznu.energy.tryCluster$energyCluster,
+                                                     acMode=data.hznu.energy.tryCluster$finalState),mat=TRUE)
+write.xlsx(x=stat.hznu.energy.tryCluster.descr,file=paste(i,"Seq","withPAM","descr","EnergyPattern.xlsx",sep = "_"))
+write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,"Seq","withPAM","EnergyPattern.xlsx",sep = "_"))
+ggsave(file=paste(i,"Seq","withPAM","EnergyPattern_dist.png",sep = "_"),
+       plot = ggplot(data=stat.hznu.energy.tryCluster.descr,aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point(),
+       width=8,height = 6,dpi = 100
+       )
+}
+
+
+
 ####根据行为模式统计能耗情况####
 stat.hznu.energy.byUsage<-data.hznu.teaching.energy.final[,.(
   runtime=mean(runtime,na.rm = TRUE),
