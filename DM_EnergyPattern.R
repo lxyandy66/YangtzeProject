@@ -116,6 +116,8 @@ ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay
 
 data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
                                               MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
+data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+                                              MARGIN = 1,FUN = sd,na.rm=TRUE)#sapply为啥不对
 data.hznu.teaching.energy.final$meanElec<-
   data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$runtime
 data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$meanElec/data.hznu.teaching.energy.final$acCount
@@ -136,15 +138,26 @@ temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)
 temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)
 temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)
 temp.std$stdMeanAcElec<-scale(data.hznu.teaching.energy.std$meanAcElec,center = FALSE)
+temp.std$stdSdElec<-scale(data.hznu.teaching.energy.std$sdElec,center = FALSE)
+temp.std$stdSdAllElec<-scale(data.hznu.teaching.energy.std$sdAllElec,center = TRUE)
 data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,temp.std)
-ggplot(data=data.hznu.teaching.energy.std,aes(x=stdMeanAcElec))+geom_density()
+
+ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,color=clusterName))+geom_density()
+
+nn<-boxplot(data =data.hznu.teaching.energy.std,runtime~clusterName,outline = FALSE)
+
+boxplot.stats(x=data.hznu.teaching.energy.std,runtime~clusterName)
+
+cor(data.hznu.energy.tryCluster[,c("stdSumElec","stdSdElec","stdSdAllElec","stdRuntime","stdAcCount")])
 
 # data.hznu.energy.tryCluster<-data.hznu.teaching.energy.final[finalState=="cooling"&sumElec<=150,c("sdElec","meanElec","sumElec","runtime")]
 data.hznu.energy.tryCluster<-data.hznu.teaching.energy.std[finalState=="cooling"]#,"meanElec","sumElec","runtime")]
-wssClusterEvaluate(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
+ggplot(data=data.hznu.energy.tryCluster,aes(x=runtime))+geom_density()+scale_x_continuous(breaks = c(1:16))#+xlim(0,100)
+
+wssClusterEvaluate(data = data.hznu.energy.tryCluster[,c("stdSumElec","stdRuntime")],
                    maxIter = 1000,maxK = 8)
 pamkClusterEvaluate(
-  data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
+  data = data.hznu.energy.tryCluster[,c("stdSumElec","stdRuntime")],
   criter = "ch",startK = 2,endK = 8)
 multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 # stat.energy.bestK<-NbClust(data=data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec","runtime")],
@@ -152,45 +165,40 @@ multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 #3或4类
 ####分类法一####
 #直接按照总体特征进行分类
-for(i in 3:6){
+for(i in 2:6){
 energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
-                  krange = i,criterion = "ch",critout = TRUE,usepam = TRUE)
+                  krange = i,criterion = "ch",critout = TRUE,usepam = FALSE)
 # energy.pamk
 data.hznu.energy.tryCluster$energyCluster<-energy.pamk$pamobject$clustering
 # data.hznu.energy.tryCluster$sdElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],
 #                                               MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
 # data.hznu.energy.tryCluster$sumElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],MARGIN = 1,FUN = sum,na.rm=TRUE)
 stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
+  count=length(labelRoomDay),
   runtime=mean(runtime,na.rm = TRUE),
   sumElec=mean(sumElec,na.rm = TRUE),
   sdElec=sd(sumElec,na.rm = TRUE),
-  meanElec=mean(meanElec,na.rm = TRUE)
+  meanElec=mean(meanElec,na.rm = TRUE),
+  meanAcElec=mean(meanAcElec,na.rm = TRUE),
+  onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
+  forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
+  afternoonUsage=length(labelRoomDay[clusterName=="Afternoon"]),
+  daytimeUsage=length(labelRoomDay[clusterName=="Daytime"]),
+  laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
+  allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=energyCluster]
 stat.hznu.energy.tryCluster<-describeBy(x = data.hznu.energy.tryCluster[,c("meanAcElec","meanElec","sumElec")],
                                         group = list(usageCluster=data.hznu.energy.tryCluster$clusterName,
                                                      energyCluster=data.hznu.energy.tryCluster$energyCluster,
                                                      acMode=data.hznu.energy.tryCluster$finalState),mat=TRUE)
-write.xlsx(x=stat.hznu.energy.tryCluster.descr,file=paste(i,"Seq","withPAM","descr","EnergyPattern.xlsx",sep = "_"))
-write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,"Seq","withPAM","EnergyPattern.xlsx",sep = "_"))
-ggsave(file=paste(i,"Seq","withPAM","EnergyPattern_dist.png",sep = "_"),
-       plot = ggplot(data=stat.hznu.energy.tryCluster.descr,aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point(),
+write.xlsx(x=stat.hznu.energy.tryCluster.descr,file=paste(i,"seq","noPAM","descr","EnergyPattern.xlsx",sep = "_"))
+write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,"seq","noPAM","EnergyPattern.xlsx",sep = "_"))
+ggsave(file=paste(i,"seq","noPAM","EnergyPattern_dist.png",sep = "_"),
+       plot = ggplot(data=stat.hznu.energy.tryCluster.descr,
+                     aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point(),
        width=8,height = 6,dpi = 100
        )
 }
 
-
-
-####根据行为模式统计能耗情况####
-stat.hznu.energy.byUsage<-data.hznu.teaching.energy.final[,.(
-  runtime=mean(runtime,na.rm = TRUE),
-  sumElec=mean(sumElec,na.rm = TRUE),
-  sdElec=mean(sdElec,na.rm = TRUE),
-  meanElec=mean(meanElec,na.rm = TRUE)
-),by=clusterName]
-aggregate(data.hznu.teaching.energy.final[,"sumElec"],
-          by = list(usageCluster=data.hznu.teaching.energy.final$clusterName,
-                    acMode=data.hznu.teaching.energy.final$finalState),FUN = boxplot.stats)#,na.action=na.omit)
-ggplot(data=data.hznu.teaching.energy.final[acCount==1],aes(x=runtime,y=sumElec,group=runtime))+geom_boxplot()
-
-
+ggplot(data.hznu.energy.tryCluster,aes(x=stdSdAllElec,color=clusterName))+geom_density()#+xlim(0,4)
 

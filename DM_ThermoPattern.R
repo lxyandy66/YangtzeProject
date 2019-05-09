@@ -1,16 +1,3 @@
-library(data.table)
-library(fpc)
-library(cluster)
-library(ggplot2)
-library(ggradar)
-library(knitr)
-library(psych)
-library(plyr)
-library(timeDate)
-library(rJava)
-library(xlsx)
-library(rgl)
-
 ## 加载数据
 load("HZNU_室内热环境数据_已清洗修正.rdata")
 load("ZJU_室内热环境数据_已清洗修正.rdata")
