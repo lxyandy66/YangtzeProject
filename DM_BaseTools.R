@@ -218,3 +218,20 @@ getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   }
 }
 
+####异常值处理方法####
+#基于聚类方法，对时序温度数据进行聚类，取出聚类样本最多的类型
+#1、根据时序温度进行聚类
+#2、统计各聚类样本数，得到最大聚类
+#3、将含最大聚类占比多的ac_code对应记录保留，其他忽略
+outlierModify<-function (tempSeq,ac_code){
+  #应传入宽数据
+  #简单检查
+  if(nrow(as.data.table(ac_code))!=nrow(as.data.table(tempSeq))){
+    warning("length not same",immediate. = TRUE)
+    return(NA)
+  }
+  #合并数据集
+  temp.outlier<-data.table(tempSeq,acCode=ac_code,
+                           outlierCluster=pamk(data=tempSeq,krange=2,criterion = "ch")$pamobject$clustering)
+  return(temp.outlier[outlierCluster==getMode(temp.outlier$outlierCluster)]$acCode)
+}

@@ -42,6 +42,7 @@ data.hznu.teaching.thermo.raw[(season %in% c("Winter","Winter_warm","Spring","Au
 stat.hznu.thermo.stableCheck<-data.hznu.teaching.thermo.raw[,.(ac_code=ac_code[1],
                                                                count=length(time),
                                                                date=date[1],
+                                                               runtime=sum(on_off,na.rm = TRUE),
                                                                mean=mean(modiTemp,na.rm =TRUE),
                                                                sd=sd(modiTemp,na.rm = TRUE),
                                                                month=substr(date[1],6,7),
@@ -50,6 +51,8 @@ stat.hznu.thermo.stableCheck<-data.hznu.teaching.thermo.raw[,.(ac_code=ac_code[1
                                                                ),
                                                             by=labelAcDay]
 stat.hznu.thermo.stableCheck$range<-stat.hznu.thermo.stableCheck$maxTemp-stat.hznu.thermo.stableCheck$minTemp
+stat.hznu.thermo.stableCheck$labelRoomDay<-paste(substr(stat.hznu.thermo.stableCheck$ac_code,1,13),stat.hznu.thermo.stableCheck$date,sep = "_")
+
 ggplot(data=data.hznu.teaching.thermo.raw[labelAcDay=="330100D258203m03_2017-10-20"]
        ,aes(x=hour,y=real_temp))+geom_point()
 length(stat.hznu.thermo.stableCheck[sd==0]$labelAcDay)
@@ -57,15 +60,43 @@ length(stat.hznu.thermo.stableCheck[sd==0]$labelAcDay)
 
 #取样参考低水平sd值的数据是否可用
 nn<-data.hznu.teaching.thermo.raw[labelAcDay=="330100D276063m01_2017-08-25"]
-stat.hznu.thermo.stableCheck<-stat.hznu.thermo.stableCheck[sd>0.2 & range>1 & minTemp<40 &
+stat.hznu.thermo.stableCheck<-stat.hznu.thermo.stableCheck[sd>0.2 & range>1 & minTemp<40 & range<20 &
                                                              complete.cases(stat.hznu.thermo.stableCheck)]
 
 #删去全天无波动的记录
-ggplot(data=stat.hznu.thermo.stableCheck,aes(x=count))+geom_density()#+xlim(0,5)
+ggplot(data=stat.hznu.thermo.stableCheck,aes(x=range))+geom_density()+xlim(0,15)
 data.hznu.teaching.thermo.cleaned<-
   data.hznu.teaching.thermo.raw[labelAcDay %in% stat.hznu.thermo.stableCheck$labelAcDay]
 
 
-####整合至小时级####
-data.hznu.teaching.thermo.cleaned$datetime<-as.POSIXct(data.hznu.teaching.thermo.cleaned$time)
-setorder(data.hznu.teaching.thermo.cleaned,ac_code,datetime)
+#参考单空调小时内温度变化情况
+stat.hznu.thermo.acRange<-
+  stat.hznu.thermo.stableCheck[length(unique(ac_code))>1,.(acCount=length(unique(ac_code)>1),
+                                                           meanRange=max(mean,na.rm = TRUE)-min(mean,na.rm = TRUE)),by=labelRoomDay]
+stat.hznu.thermo.acRange$logCount<-sapply(stat.hznu.thermo.acRange$labelRoomDay,
+                                          function(x){length(!is.na(data.hznu.teaching.thermo.cleaned[labelRoomDay==x]$modiTemp))})
+
+ggplot(data=stat.hznu.thermo.acRange,aes(x=meanRange))+geom_density()
+nn<-data.hznu.teaching.thermo.cleaned[labelRoomDay=="330100D260201_2017-03-13"]
+#ggplot(data=nn,aes(x=hour,y=modiTemp))+geom_boxplot()
+ggplot(data=nn,aes(x=hour,y=modiTemp,color=ac_code,group=ac_code))+geom_point()+geom_line()
+nn$hourMin<-substr(nn$time,12,16)
+nn1<-dcast(nn[,c("ac_code","modiTemp","hourMin")],ac_code~hourMin,value.var = "modiTemp")
+outlierModify(tempSeq = nn1[,c(2:49)],ac_code = nn1$ac_code)
+
+
+# #异常值处理尝试
+# temp.outlier.test<-data.hznu.teaching.thermo.cleaned[labelRoomDay=="330100D257209_2017-02-21"]
+# temp.outlier.test$hourMin<-substr(temp.outlier.test$time,12,16)
+# temp.outlier.test.wid<-dcast(temp.outlier.test[,c("ac_code","modiTemp","hourMin")],ac_code~hourMin,value.var = "modiTemp")
+# #似乎宽数据来聚类效果比长数据好
+# temp.outlier.test.wid$outlierCluster<-pamk(data=temp.outlier.test.wid[,c(2:49)],krange=2,criterion = "ch")$pamobject$clustering
+# temp.outlier.test.wid$outlierCluster<-as.factor(temp.outlier.test.wid$outlierCluster)
+# ggplot(data=temp.outlier.test,aes(x=hour,y=modiTemp,color=ac_code,group=ac_code))+geom_point()+geom_line()
+# temp.stat.outlier<-temp.outlier.test[,.(cluster1=length(labelAcDay[outlierCluster==1]),
+#                                         cluster2=length(labelAcDay[outlierCluster==2])
+#                                         ),by=ac_code]
+# outlierModify(temp.outlier.test.wid[,c(2:49)],temp.outlier.test.wid$ac_code)
+
+
+
