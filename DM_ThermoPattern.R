@@ -22,6 +22,7 @@ data.hznu.final <-
                       "day",
                       "hour",
                       "minute")]
+
 data.hznu.final$label <-
   paste(
     data.hznu.final$room_code,
