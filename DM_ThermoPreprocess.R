@@ -71,32 +71,64 @@ data.hznu.teaching.thermo.cleaned<-
 
 #参考单空调小时内温度变化情况
 stat.hznu.thermo.acRange<-
-  stat.hznu.thermo.stableCheck[length(unique(ac_code))>1,.(acCount=length(unique(ac_code)>1),
-                                                           meanRange=max(mean,na.rm = TRUE)-min(mean,na.rm = TRUE)),by=labelRoomDay]
+  stat.hznu.thermo.stableCheck[,.(acCount=length(unique(ac_code)),
+                                  meanRange=max(mean,na.rm = TRUE)-min(mean,na.rm = TRUE)),by=labelRoomDay]
+stat.hznu.thermo.acRange<-stat.hznu.thermo.acRange[acCount>1]
 stat.hznu.thermo.acRange$logCount<-sapply(stat.hznu.thermo.acRange$labelRoomDay,
                                           function(x){length(!is.na(data.hznu.teaching.thermo.cleaned[labelRoomDay==x]$modiTemp))})
-
 ggplot(data=stat.hznu.thermo.acRange,aes(x=meanRange))+geom_density()
-nn<-data.hznu.teaching.thermo.cleaned[labelRoomDay=="330100D260201_2017-03-13"]
-#ggplot(data=nn,aes(x=hour,y=modiTemp))+geom_boxplot()
-ggplot(data=nn,aes(x=hour,y=modiTemp,color=ac_code,group=ac_code))+geom_point()+geom_line()
-nn$hourMin<-substr(nn$time,12,16)
-nn1<-dcast(nn[,c("ac_code","modiTemp","hourMin")],ac_code~hourMin,value.var = "modiTemp")
-outlierModify(tempSeq = nn1[,c(2:49)],ac_code = nn1$ac_code)
+stat.hznu.thermo.needProcess<-stat.hznu.thermo.acRange[meanRange>5]
 
 
-# #异常值处理尝试
-# temp.outlier.test<-data.hznu.teaching.thermo.cleaned[labelRoomDay=="330100D257209_2017-02-21"]
-# temp.outlier.test$hourMin<-substr(temp.outlier.test$time,12,16)
-# temp.outlier.test.wid<-dcast(temp.outlier.test[,c("ac_code","modiTemp","hourMin")],ac_code~hourMin,value.var = "modiTemp")
-# #似乎宽数据来聚类效果比长数据好
-# temp.outlier.test.wid$outlierCluster<-pamk(data=temp.outlier.test.wid[,c(2:49)],krange=2,criterion = "ch")$pamobject$clustering
-# temp.outlier.test.wid$outlierCluster<-as.factor(temp.outlier.test.wid$outlierCluster)
-# ggplot(data=temp.outlier.test,aes(x=hour,y=modiTemp,color=ac_code,group=ac_code))+geom_point()+geom_line()
+#异常值长数据处理尝试
+temp.outlier.test<-(data.hznu.teaching.thermo.cleaned[labelRoomDay=="330100D258102_2017-12-21"])
+#似乎长数据来聚类效果比宽数据好，鲁棒性较强
+temp.outlier.test$isSelected<-"0"
+temp.outlier.test[ac_code %in% outlierModify(temp.outlier.test$modiTemp,temp.outlier.test$ac_code)]$isSelected<-"1"
+ggplot(data=temp.outlier.test,aes(x=hour,y=modiTemp,color=isSelected,group=ac_code,shape=ac_code))+geom_point()+geom_line()
+# temp.outlier.test$outlierCluster<-pamk(data=temp.outlier.test$modiTemp,krange=2,criterion = "ch")$pamobject$clustering
+# temp.outlier.test$outlierCluster<-as.factor(temp.outlier.test$outlierCluster)
+# ggplot(data=temp.outlier.test,aes(x=hour,y=modiTemp,color=outlierCluster,group=ac_code))+geom_point()+geom_line()
 # temp.stat.outlier<-temp.outlier.test[,.(cluster1=length(labelAcDay[outlierCluster==1]),
 #                                         cluster2=length(labelAcDay[outlierCluster==2])
 #                                         ),by=ac_code]
-# outlierModify(temp.outlier.test.wid[,c(2:49)],temp.outlier.test.wid$ac_code)
+
+
+####转化为日内小时宽数据####
+# 先将需要处理的数据区分，stat.hznu.thermo.needProcess提出处理后再合并
+data.hznu.teaching.thermo.cleaned$labelRoomDayHour<-
+  paste(data.hznu.teaching.thermo.cleaned$labelRoomDay,data.hznu.teaching.thermo.cleaned$hour,sep = "_")
+setorder(data.hznu.teaching.thermo.cleaned,ac_code,time)
+#尝试一个合并的简洁写法
+data.hznu.teaching.thermo.day.long<-
+  data.hznu.teaching.thermo.cleaned[,.(
+    time=time[1],
+    roomCode=roomCode[1],
+    labelRoomDay=labelRoomDay[1],
+    hour=hour[1],
+    real_temp=mean(real_temp,na.rm = TRUE),
+    set_temp=mean(set_temp[on_off==1],na.rm = TRUE),
+    modiTemp=mean(modiTemp[ifelse(
+      labelRoomDay %in% stat.hznu.thermo.needProcess,
+      ac_code %in% outlierModify(data.hznu.teaching.thermo.cleaned[labelRoomDay==labelRoomDay[1]]$modiTemp,
+                                 data.hznu.teaching.thermo.cleaned[labelRoomDay==labelRoomDay[1]]$ac_code),
+      TRUE)],na.rm = TRUE)
+  ),by=labelRoomDayHour]
+data.hznu.teaching.thermo.day.long$date<-
+  getSplitMember(data.hznu.teaching.thermo.day.long$labelRoomDay,splitSimbol = "_",isLastOne = TRUE)
+data.hznu.teaching.thermo.day.final<-dcast(
+  data.hznu.teaching.thermo.day.long[hour %in% sprintf("%02d",8:22),c("labelRoomDay","date","roomCode","modiTemp","hour")],
+  labelRoomDay+date+roomCode~hour,value.var = "modiTemp")
+names(data.hznu.teaching.thermo.day.final)<-c("labelRoomDay","date","roomCode",sprintf("h%02d",8:22))
+data.hznu.teaching.thermo.day.final<-as.data.table(data.hznu.teaching.thermo.day.final)
+
+####增加一些统计量####
+data.hznu.teaching.thermo.day.final$sd<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN = sd,na.rm=TRUE)
+data.hznu.teaching.thermo.day.final$meanTemp<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN = mean,na.rm=TRUE)
+data.hznu.teaching.thermo.day.final$naCount<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN=function(x){sum(is.na(x))})
+# ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0],aes(x=naCount))+geom_density()+scale_x_continuous(breaks = c(1:15))
+
+
 
 
 
