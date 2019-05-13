@@ -254,6 +254,7 @@ outlierModify<-function (data,ac_code){
   }
 }
 
+#该方法有问题，该指标暂时不使用
 ####用于将室内温度分为高温及低温两类并计算比例####
 tempRatioSplit<-function(tempSeq){
   tempSeq<-na.omit(tempSeq)

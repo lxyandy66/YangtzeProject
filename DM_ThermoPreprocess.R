@@ -114,8 +114,8 @@ data.hznu.teaching.thermo.day.long<-
                                  data.hznu.teaching.thermo.cleaned[labelRoomDay==labelRoomDay[1]]$ac_code),
       TRUE)],na.rm = TRUE)
   ),by=labelRoomDayHour]
-data.hznu.teaching.thermo.day.long$date<-
-  getSplitMember(data.hznu.teaching.thermo.day.long$labelRoomDay,splitSimbol = "_",isLastOne = TRUE)
+data.hznu.teaching.thermo.day.long$date<-apply(data.hznu.teaching.thermo.day.long[,"labelRoomDay"],
+                                               MARGIN = 1,FUN = getSplitMember,splitSimbol = "_",isLastOne = TRUE)
 data.hznu.teaching.thermo.day.final<-dcast(
   data.hznu.teaching.thermo.day.long[hour %in% sprintf("%02d",8:22),c("labelRoomDay","date","roomCode","modiTemp","hour")],
   labelRoomDay+date+roomCode~hour,value.var = "modiTemp")
@@ -129,6 +129,30 @@ data.hznu.teaching.thermo.day.final$naCount<-apply(data.hznu.teaching.thermo.day
 # ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0],aes(x=naCount))+geom_density()+scale_x_continuous(breaks = c(1:15))
 
 
+#
+tmp.temp.test<-data.hznu.teaching.thermo.day.final[labelRoomDay %in% c("330100D276101_2017-01-05","330100D255103_2017-01-12",
+                                                                       "330100D272311_2017-07-02","330100D256302_2017-07-20")]
 
+# 这个指标暂时不用
+# tmp.temp.test$lowRatio<-apply(tmp.temp.test[,4:18],MARGIN = 1,FUN = function(x){
+#   tmp<-as.data.table(tempRatioSplit(x))
+#   as.numeric(tmp[1]$ratio)
+#   # return(as.numeric(tmp[1,"ratio"]))
+# })
 
+# tempSeq<-na.omit(as.numeric(tmp.temp.test[1,4:18]))
+# data<-data.table(dt=tempSeq)
+# data$cluster<-pamk(data$dt,krange=2,criterion = "ch")$pamobject$clustering
+# stat<-data[,.(meanTemp=mean(dt,na.rm = TRUE),
+#               count=length(dt)
+# ),by=cluster]
+# setorder(stat,meanTemp)
+# stat$ratio<-stat$count/nrow(data)
+# stat[1,"ratio"]
+
+# tmp.temp.test$ccc<-apply(tmp.temp.test[,4:18],MARGIN = 1,FUN = function(x){
+#   cat(class(x))
+#   tmp.prep<-na.omit(data.table(t(x)))
+#   return(NbClust(data=tmp.prep,min.nc = 2,max.nc = 5,method = "kmeans"))
+# })
 
