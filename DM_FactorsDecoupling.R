@@ -13,6 +13,33 @@ for(i in c(2:6)){
 ggplot(data=data.hznu.use.final,aes(x=modiSeason,y=runtime))+geom_boxplot()
 boxplot(data = data.hznu.use.final,runtime~
           paste(data.hznu.use.final$modiSeason,data.hznu.use.final$finalState))
+#按空调模式统计数据
+stat.use.room.cluster.byMode<-data.hznu.use.final[,.(
+  count=length(labelRoomDay),
+  finalState=unique(finalState),
+  clusterName=unique(clusterName),
+  runtime=mean(runtime,na.rm = TRUE),
+  h8=mean(h8,na.rm = TRUE),
+  h9=mean(h9,na.rm = TRUE),
+  h10=mean(h10,na.rm = TRUE),
+  h11=mean(h11,na.rm = TRUE),
+  h12=mean(h12,na.rm = TRUE),
+  h13=mean(h13,na.rm = TRUE),
+  h14=mean(h14,na.rm = TRUE),
+  h15=mean(h15,na.rm = TRUE),
+  h16=mean(h16,na.rm = TRUE),
+  h17=mean(h17,na.rm = TRUE),
+  h18=mean(h18,na.rm = TRUE),
+  h19=mean(h19,na.rm = TRUE),
+  h20=mean(h20,na.rm = TRUE),
+  h21=mean(h21,na.rm = TRUE),
+  h22=mean(h22,na.rm = TRUE)
+),by=paste(clusterName,finalState,sep = "_")]
+plot.use.room.cluster.byMode<-melt(data = stat.use.room.cluster.byMode[,c("paste","finalState","clusterName",sprintf("h%d",8:22))],
+                                   id = c("paste","finalState","clusterName"))
+ggplot(data = plot.use.room.cluster.byMode[finalState=="cooling"],
+       aes(x=variable,y=value,group=paste,color=paste,shape=paste))+geom_point()+geom_line()
+ggplot(data = data.hznu.use.final[finalState=="cooling"],aes(x=clusterName,y=runtime,color=clusterName))+geom_boxplot()
 
 stat.use.clusterDescribe<-data.hznu.use.final[,.(
   count=length(labelRoomDay),

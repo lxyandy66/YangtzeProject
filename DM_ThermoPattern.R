@@ -1,6 +1,157 @@
+<<<<<<< HEAD
 ####本脚本用于热环境聚类####
 #更新重写，原脚本停止使用
 #接已处理热环境数据"HZNU_含追加_房间级_热环境模式预处理完成.rdata"
+=======
+## 加载数据
+load("HZNU_室内热环境数据_已清洗修正.rdata")
+load("ZJU_室内热环境数据_已清洗修正.rdata")
+
+#########删去多余的数据并将两者数据格式统一为按房间逐半小时记录
+data.zju.thermo.rawProcess <-
+  data.zju.thermo.rawProcess[, c("date_time",
+                                 "room_code",
+                                 "temp",
+                                 "year",
+                                 "month",
+                                 "day",
+                                 "hour",
+                                 "halfHour")]
+data.hznu.final <-
+  data.hznu.final[, c("time",
+                      "ac_code",
+                      "room_code",
+                      "real_temp",
+                      "year",
+                      "month",
+                      "day",
+                      "hour",
+                      "minute")]
+
+data.hznu.final$label <-
+  paste(
+    data.hznu.final$room_code,
+    data.hznu.final$year,
+    data.hznu.final$month,
+    data.hznu.final$day,
+    data.hznu.final$hour,
+    data.hznu.final$minute,
+    sep = "-"
+  )#标签为： 房间号-年-月-日-小时-半小时
+data.zju.thermo.rawProcess$label <-
+  paste(
+    data.zju.thermo.rawProcess$room_code,
+    data.zju.thermo.rawProcess$year,
+    data.zju.thermo.rawProcess$month,
+    data.zju.thermo.rawProcess$day,
+    data.zju.thermo.rawProcess$hour,
+    data.zju.thermo.rawProcess$halfHour,
+    sep = "-"
+  )
+
+##增加季节标签
+data.hznu.final$season <- lapply(data.hnzu.final$month,getSeason)
+
+data.zju.thermo.rawProcess$season <- lapply(data.zju.thermo.rawProcess$month,getSeason)
+
+###按季节把各月单独提取，否则太慢了
+###先将数据按房间及半小时汇总
+setorder(data.hznu.final, time, room_code)
+setorder(data.zju.thermo.rawProcess, date_time, room_code)
+data.hznu.room <-
+  data.hznu.final[, .(
+    date_time = time[1],
+    #date_time这里会是factor类型
+    room_code = room_code[1],
+    temp = mean(real_temp),
+    year = year[1],
+    month = month[1],
+    day = day[1],
+    hour = hour[1],
+    halfHour = minute[1],
+    season = season[1]
+  ), by = label]
+data.zju.room <- data.zju.thermo.rawProcess[, .(
+  date_time = date_time[1],
+  room_code = room_code[1],
+  temp = mean(temp),
+  year = year[1],
+  month = month[1],
+  day = day[1],
+  hour = hour[1],
+  halfHour = unique(halfHour),
+  season = season[1]
+), by = label]
+data.hznu.room$date_time <- as.POSIXct(data.hznu.room$date_time)
+data.zju.room$date_time <- as.POSIXct(data.zju.room$date_time)
+
+###将所有数据合并
+data.raw.all <-
+  rbind(data.zju.room, data.hznu.room)[hour %in% sprintf("%02d",c(8:22))]
+data.raw.all$labelDay <-
+  paste(
+    data.raw.all$room_code,
+    data.raw.all$year,
+    data.raw.all$month,
+    data.raw.all$day,
+    sep = "-"
+  )
+data.raw.all <- data.raw.all[!duplicated(data.raw.all)]
+###清洗日内长度不为30的数据，即8：00-22:00中间有缺失或多余的数据
+data.labelSelect <-
+  data.raw.all[, .(num = length(temp)), by = labelDay]
+#这里要看一下不为30的数据有多少
+# data.err<-data.raw.all[labelDay %in% data.labelSelect[num != 30]$labelDay] #10565
+data.raw.all <-
+  data.raw.all[labelDay %in% data.labelSelect[num == 30]$labelDay]
+rm(data.hznu.room)
+rm(data.zju.room)
+rm(data.err)
+
+
+######设置日期标签，将数据变成一天的记录
+data.analyse.all <- data.raw.all[, .(
+  date_time = paste(unique(year), unique(month), unique(day), sep = "-"),
+  #小心这么弄出来是char啊
+  room_code = unique(room_code),
+  season = unique(season),
+  h08.00 = temp[1],
+  h08.30 = temp[2],
+  h09.00 = temp[3],
+  h09.30 = temp[4],
+  h10.00 = temp[5],
+  h10.30 = temp[6],
+  h11.00 = temp[7],
+  h11.30 = temp[8],
+  h12.00 = temp[9],
+  h12.30 = temp[10],
+  h13.00 = temp[11],
+  h13.30 = temp[12],
+  h14.00 = temp[13],
+  h14.30 = temp[14],
+  h15.00 = temp[15],
+  h15.30 = temp[16],
+  h16.00 = temp[17],
+  h16.30 = temp[18],
+  h17.00 = temp[19],
+  h17.30 = temp[20],
+  h18.00 = temp[21],
+  h18.30 = temp[22],
+  h19.00 = temp[23],
+  h19.30 = temp[24],
+  h20.00 = temp[25],
+  h20.30 = temp[26],
+  h21.00 = temp[27],
+  h21.30 = temp[28],
+  h22.00 = temp[29],
+  h22.30 = temp[30]
+), by = labelDay]#好吧涉及变量都要用unique或者取头一个，否则会重读
+data.analyse.all <- data.analyse.all[!duplicated(data.analyse.all)]
+data.analyse.all$date_time <- as.Date(data.analyse.all$date_time)
+data.analyse.all$isWorkday <-
+  isWeekday(timeDate(data.analyse.all$date_time))
+
+>>>>>>> 61c58b38d28705015d72a6cda6e519c4e4779936
 
 #####开始聚类分析
 seasonSelect <- "Spring"

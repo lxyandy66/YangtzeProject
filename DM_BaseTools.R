@@ -216,5 +216,53 @@ getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   }else{
     return(nn[length(nn)])
   }
+}##!!!!apply中出现了问题
+
+####异常值处理方法####
+#基于聚类方法，对时序温度数据进行聚类，取出聚类样本最多的类型
+#1、根据时序温度进行聚类
+#2、统计各聚类样本数，得到最大聚类
+#3、将含最大聚类占比多的ac_code对应记录保留，其他忽略
+#tip:仅用于没有缺失值的宽数据
+outlierWidSeqModify<-function (tempSeq,ac_code){
+  #应传入宽数据
+  #简单检查
+  if(nrow(as.data.table(ac_code))!=nrow(as.data.table(tempSeq))){
+    warning("length not same",immediate. = TRUE)
+    return(NA)
+  }
+  #合并数据集
+  temp.outlier<-data.table(tempSeq,acCode=ac_code,
+                           outlierCluster=pamk(data=tempSeq,krange=2,criterion = "ch")$pamobject$clustering)
+  return(temp.outlier[outlierCluster==getMode(temp.outlier$outlierCluster)]$acCode)
 }
 
+#适用于长数据，效果相对宽数据不敏感，但允许缺失值
+outlierModify<-function (data,ac_code){
+  #应传入长数据
+  data<-na.omit(data)
+  temp.outlier<-data.table(dt=data,acCode=ac_code,
+                           outlierCluster=pamk(data,krange=2,criterion = "ch")$pamobject$clustering)
+  maxCluster<-ifelse(nrow(temp.outlier[outlierCluster==1])>
+                       nrow(temp.outlier[outlierCluster==2]),1,2)
+  temp.stat.outlier<-temp.outlier[,.(cluster1=length(dt[outlierCluster==1]),
+                                    cluster2=length(dt[outlierCluster==2])),by=acCode]
+  if(maxCluster==1){
+    return(temp.stat.outlier[cluster1>=cluster2]$acCode)
+  }else{
+    return(temp.stat.outlier[cluster1<=cluster2]$acCode)
+  }
+}
+
+#该方法有问题，该指标暂时不使用
+####用于将室内温度分为高温及低温两类并计算比例####
+tempRatioSplit<-function(tempSeq){
+  tempSeq<-na.omit(tempSeq)
+  data<-data.table(dt=tempSeq)
+  data$cluster<-pamk(data$dt,krange=2,criterion = "ch")$pamobject$clustering
+  stat<-data[,.(meanTemp=mean(dt,na.rm = TRUE),
+                count=length(dt)
+                ),by=cluster]
+  setorder(stat,meanTemp)
+  stat$ratio<-stat$count/nrow(data)
+}
