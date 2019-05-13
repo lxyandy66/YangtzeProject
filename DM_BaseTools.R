@@ -259,10 +259,14 @@ outlierModify<-function (data,ac_code){
 tempRatioSplit<-function(tempSeq){
   tempSeq<-na.omit(tempSeq)
   data<-data.table(dt=tempSeq)
-  data$cluster<-pamk(data$dt,krange=2,criterion = "ch")$pamobject$clustering
-  stat<-data[,.(meanTemp=mean(dt,na.rm = TRUE),
-                count=length(dt)
-                ),by=cluster]
-  setorder(stat,meanTemp)
-  stat$ratio<-stat$count/nrow(data)
+  tryCatch({
+    data$cluster<-pamk(data$dt,krange=2,criterion = "ch")$pamobject$clustering
+    stat<-data[,.(meanTemp=mean(dt,na.rm = TRUE),
+                  count=length(dt)
+    ),by=cluster]
+    setorder(stat,meanTemp)
+    stat$ratio<-stat$count/nrow(data)
+    return(as.matrix(stat[,2:4],byrow = TRUE,ncol = 2))
+  },error=function(e){cat("ERROR :",conditionMessage(e),"at First seq: ",tempSeq[1],"\n")})
+  
 }

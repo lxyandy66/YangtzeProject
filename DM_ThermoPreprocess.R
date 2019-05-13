@@ -126,29 +126,17 @@ data.hznu.teaching.thermo.day.final<-as.data.table(data.hznu.teaching.thermo.day
 data.hznu.teaching.thermo.day.final$sd<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN = sd,na.rm=TRUE)
 data.hznu.teaching.thermo.day.final$meanTemp<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN = mean,na.rm=TRUE)
 data.hznu.teaching.thermo.day.final$naCount<-apply(data.hznu.teaching.thermo.day.final[,4:18],MARGIN = 1,FUN=function(x){sum(is.na(x))})
-# ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0],aes(x=naCount))+geom_density()+scale_x_continuous(breaks = c(1:15))
+data.hznu.teaching.thermo.day.final$month<-as.numeric(substr(data.hznu.teaching.thermo.day.final$date,6,7))
+data.hznu.teaching.thermo.day.final$season<-apply(data.hznu.teaching.thermo.day.final[,"month"],MARGIN = 1,FUN = getSeason)
+data.hznu.teaching.thermo.day.final.modify<-data.table(data.hznu.teaching.thermo.day.final[,c(1:3,19:23)],apply)
+ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0],aes(x=naCount))+geom_density()+scale_x_continuous(breaks = c(1:15))
 
 
 #
 tmp.temp.test<-data.hznu.teaching.thermo.day.final[labelRoomDay %in% c("330100D276101_2017-01-05","330100D255103_2017-01-12",
                                                                        "330100D272311_2017-07-02","330100D256302_2017-07-20")]
 
-# 这个指标暂时不用
-# tmp.temp.test$lowRatio<-apply(tmp.temp.test[,4:18],MARGIN = 1,FUN = function(x){
-#   tmp<-as.data.table(tempRatioSplit(x))
-#   as.numeric(tmp[1]$ratio)
-#   # return(as.numeric(tmp[1,"ratio"]))
-# })
 
-# tempSeq<-na.omit(as.numeric(tmp.temp.test[1,4:18]))
-# data<-data.table(dt=tempSeq)
-# data$cluster<-pamk(data$dt,krange=2,criterion = "ch")$pamobject$clustering
-# stat<-data[,.(meanTemp=mean(dt,na.rm = TRUE),
-#               count=length(dt)
-# ),by=cluster]
-# setorder(stat,meanTemp)
-# stat$ratio<-stat$count/nrow(data)
-# stat[1,"ratio"]
 
 # tmp.temp.test$ccc<-apply(tmp.temp.test[,4:18],MARGIN = 1,FUN = function(x){
 #   cat(class(x))
