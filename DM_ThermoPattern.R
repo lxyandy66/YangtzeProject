@@ -12,7 +12,7 @@ nrow(tmp.na.modi[!complete.cases(tmp.na.modi)])
 names(tmp.na.modi)<-sprintf("modH%02d",8:22)
 data.hznu.teaching.thermo.day.final.modify<-cbind(data.hznu.teaching.thermo.day.final.modify,tmp.na.modi)
 data.hznu.teaching.thermo.day.final.modify<-merge(x=data.hznu.teaching.thermo.day.final.modify,
-                                                  y=data.hznu.use.final[,c("labelRoomDay","finalState","clusterName")],
+                                                  y=data.hznu.use.final[,c("labelRoomDay","runtime","finalState","clusterName")],
                                                   by.x = "labelRoomDay",
                                                   by.y = "labelRoomDay",
                                                   all.x = TRUE)
@@ -56,7 +56,7 @@ names(tmp.scale)<-c(sprintf("stdModH%02d",8:22),names(tmp.scale)[16:24])
 data.hznu.teaching.thermo.day.final.modify<-cbind(
   data.hznu.teaching.thermo.day.final.modify,tmp.scale[,c(sprintf("stdModH%02d",8:22),"stdSd","stdMeanTemp","stdRange","stdLowHighRatio")])
 
-合并至列表
+# 合并至列表
 list.hznu.teaching.thermo<-split(data.hznu.teaching.thermo.day.final.modify,
                                  f=as.factor(data.hznu.teaching.thermo.day.final.modify$labelSeasonState))
 #####开始聚类分析
@@ -85,6 +85,37 @@ stat.hznu.thermo.season<-data.hznu.teaching.thermo.day.final.modify[,.(
     startK = 1,
     endK = 10
   )
-  thermo.pamk<-pamk(data.hznu.thermo.tryCluster[,..clusterAttr],krange = )
+  hasPAM<-FALSE
+  for(i in c(3:7)){
+    thermo.pamk<-pamk(data.hznu.thermo.tryCluster[,..clusterAttr],krange = i,
+                      criterion = "ch",critout = TRUE,usepam = hasPAM)
+    data.hznu.thermo.tryCluster$thermoCluster<-thermo.pamk$pamobject$clustering
+    stat.hznu.thermo.tryCluster.descr<-data.hznu.thermo.tryCluster[,.(
+      count=length(labelRoomDay),
+      runtime=mean(runtime,na.rm = TRUE),
+      range=mean(range,na.rm = TRUE),
+      lowHighRatioValue=mean(lowHighRatioValue,na.rm = TRUE),
+      sd=sd(sd,na.rm = TRUE),
+      meanTemp=mean(meanTemp,na.rm = TRUE),
+      onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
+      forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
+      afternoonUsage=length(labelRoomDay[clusterName=="Afternoon"]),
+      daytimeUsage=length(labelRoomDay[clusterName=="Daytime"]),
+      laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
+      allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
+    ),by=thermoCluster]
+    write.xlsx(stat.hznu.thermo.tryCluster.descr,
+               file=paste(i,modeSelect,"4var",ifelse(hasPAM,"withPAM","noPAM"),"descr","ThermoPattern.xlsx",sep = "_"))
+    ggsave(file=paste(i,modeSelect,"4var",ifelse(hasPAM,"withPAM","noPAM"),"ThermoPattern_dist.png",sep = "_"),
+           plot = ggplot(data=stat.hznu.thermo.tryCluster.descr,
+                         aes(x=meanTemp,y=lowHighRatioValue,size=sd))+geom_point(),
+           width=8,height = 6,dpi = 100)
+  }
 }
+
+nn1<-t(data.hznu.teaching.thermo.day.final.modify[labelRoomDay=="330100D255102_2017-09-04",c(sprintf("modH%02d",8:22))])
+nn1<-data.table(nn1[,1])
+nn1$seq<-c(1:nrow(nn1))
+nn1$cluster<-pamk(nn1$V1,krange=2,criterion = "ch")$pamobject$clustering
+ggplot(nn1,aes(x=seq,y=V1,color=cluster))+geom_point()+geom_line()
 
