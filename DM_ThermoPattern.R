@@ -160,10 +160,30 @@ for(i in names(list.hznu.teaching.thermo)){
 tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[6]][1:300,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
                        id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
 tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
-ggplot(data=tmp.plot.heatMap[thermoPattern %in% c("high","low")],
-       aes(x=labelRoomDay,y=hour,fill=value,group=thermoPattern))+geom_tile(na.rm = TRUE)+facet_wrap(~ thermoPattern, nrow = 4)
+for(i in names(list.hznu.teaching.thermo)){
+  tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[i]][,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
+                         id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
+  tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
+  range<-range(tmp.plot.heatMap$value)
+  for(j in unique(tmp.plot.heatMap$thermoPattern))
+  {
+    ggsave(file=paste(i,j,"heatMap.png",sep = "_"),
+          plot=ggplot(data=tmp.plot.heatMap[thermoPattern==j],
+                      aes(x=hour,y=labelRoomDay,fill=value,group=thermoPattern))+
+               geom_raster(interpolate = TRUE)+
+               scale_fill_gradient(limits = c(range[1],range[2]),low = "green",high = "red")+
+               facet_wrap(~ thermoPattern, nrow = 2)+theme_classic()+
+               theme(axis.title.y=element_blank(),axis.text.y=element_blank(), axis.ticks.y=element_blank()),
+          width=4,height = 3,dpi = 80  
+    )}
+  }
 
-
+data.hznu.teaching.thermo.final<-list.hznu.teaching.thermo[[1]]
+for(i in 2:length(list.hznu.teaching.thermo)){
+  data.hznu.teaching.thermo.final<-rbind(data.hznu.teaching.thermo.final,list.hznu.teaching.thermo[[i]])
+}
+save(data.hznu.teaching.thermo.final,
+     list.hznu.teaching.thermo,file = "HZNU_含追加_房间级_教学_热环境聚类完成.rdata")
 
 nn1<-t(data.hznu.teaching.thermo.day.final.modify[labelRoomDay=="330100D255102_2017-09-04",c(sprintf("modH%02d",8:22))])
 nn1<-data.table(nn1[,1])
