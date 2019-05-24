@@ -128,10 +128,16 @@ ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
 data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[!is.na(runtime)]
 ggplot(data=data.hznu.teaching.energy.final,aes(x=meanAcElec))+geom_density()+xlim(0,ecLim)
 
+####计算得单位空调能耗####
+tmp.mean<-data.table(data.hznu.teaching.energy.std[,c(sprintf("h%d",8:22),"acCount")])
+tmp.mean[,c(sprintf("euiH%d",8:22))]<-tmp.mean[,c(sprintf("h%d",8:22))]/tmp.mean$acCount
+
 ####能耗数据的归一化处理####
 #使用z-score算法零-均值标准化
 data.hznu.teaching.energy.std<-data.hznu.teaching.energy.final[sumElec<=150&meanAcElec<=ecLim]
-temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("h%d",8:22))],center = FALSE))
+data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,tmp.mean[,c(sprintf("euiH%d",8:22))])
+
+temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("euiH%d",8:22))],center = FALSE))
 names(temp.std)<-sprintf("stdH%d",8:22)
 temp.std$stdSumElec<-scale(data.hznu.teaching.energy.std$sumElec,center = FALSE)
 temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)
@@ -139,7 +145,7 @@ temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)
 temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)
 temp.std$stdMeanAcElec<-scale(data.hznu.teaching.energy.std$meanAcElec,center = FALSE)
 temp.std$stdSdElec<-scale(data.hznu.teaching.energy.std$sdElec,center = FALSE)
-temp.std$stdSdAllElec<-scale(data.hznu.teaching.energy.std$sdAllElec,center = TRUE)
+temp.std$stdSdAllElec<-scale(data.hznu.teaching.energy.std$sdAllElec,center = FALSE)
 data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,temp.std)
 
 ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,color=clusterName))+geom_density()
