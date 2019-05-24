@@ -114,12 +114,19 @@ data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[sumElec!=0]
 nn<-data.hznu.teaching.energy.final[which(rowSums(is.na(data.hznu.teaching.energy.final))>0),]#行为finalState及basePattern缺失1787条
 ggplot(data = data.hznu.teaching.energy.final[!labelRoomDay %in% nn$labelRoomDay],aes(x=sumElec))+geom_density()+xlim(0,150)
 
-data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+####计算得单位空调能耗####
+tmp.mean<-data.table(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22),"acCount")])
+tmp.mean[,c(sprintf("euiH%d",8:22))]<-tmp.mean[,c(sprintf("h%d",8:22))]/tmp.mean$acCount
+data.hznu.teaching.energy.final<-cbind(data.hznu.teaching.energy.final,tmp.mean[,c(sprintf("euiH%d",8:22))])
+
+data.hznu.teaching.energy.final$sumUiElec<-
+  data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$acCount
+data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
                                               MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
-data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
                                               MARGIN = 1,FUN = sd,na.rm=TRUE)#sapply为啥不对
 data.hznu.teaching.energy.final$meanElec<-
-  data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$runtime
+  data.hznu.teaching.energy.final$sumUiElec/data.hznu.teaching.energy.final$runtime
 data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$meanElec/data.hznu.teaching.energy.final$acCount
 #对于单台空调能耗设上限
 ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
@@ -128,14 +135,11 @@ ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
 data.hznu.teaching.energy.final<-data.hznu.teaching.energy.final[!is.na(runtime)]
 ggplot(data=data.hznu.teaching.energy.final,aes(x=meanAcElec))+geom_density()+xlim(0,ecLim)
 
-####计算得单位空调能耗####
-tmp.mean<-data.table(data.hznu.teaching.energy.std[,c(sprintf("h%d",8:22),"acCount")])
-tmp.mean[,c(sprintf("euiH%d",8:22))]<-tmp.mean[,c(sprintf("h%d",8:22))]/tmp.mean$acCount
+
 
 ####能耗数据的归一化处理####
 #使用z-score算法零-均值标准化
 data.hznu.teaching.energy.std<-data.hznu.teaching.energy.final[sumElec<=150&meanAcElec<=ecLim]
-data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,tmp.mean[,c(sprintf("euiH%d",8:22))])
 
 temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("euiH%d",8:22))],center = FALSE))
 names(temp.std)<-sprintf("stdH%d",8:22)
