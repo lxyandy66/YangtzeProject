@@ -128,6 +128,7 @@ data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final
 data.hznu.teaching.energy.final$meanElec<-
   data.hznu.teaching.energy.final$sumUiElec/data.hznu.teaching.energy.final$runtime
 data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$meanElec/data.hznu.teaching.energy.final$acCount
+
 #对于单台空调能耗设上限
 ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
   3*sd(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)
@@ -143,7 +144,7 @@ data.hznu.teaching.energy.std<-data.hznu.teaching.energy.final[sumElec<=150&mean
 
 temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("euiH%d",8:22))],center = FALSE))
 names(temp.std)<-sprintf("stdH%d",8:22)
-temp.std$stdSumElec<-scale(data.hznu.teaching.energy.std$sumElec,center = FALSE)
+temp.std$stdSumEuiElec<-scale(data.hznu.teaching.energy.std$sumUiElec,center = FALSE)
 temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)
 temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)
 temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)
@@ -158,16 +159,25 @@ nn<-boxplot(data =data.hznu.teaching.energy.std,runtime~clusterName,outline = FA
 
 boxplot.stats(x=data.hznu.teaching.energy.std,runtime~clusterName)
 
-cor(data.hznu.energy.tryCluster[,c("stdSumElec","stdSdElec","stdSdAllElec","stdRuntime","stdAcCount")])
+
+
+cor(data.hznu.energy.tryCluster[,c("stdSumElec","stdSdAllElec","stdRuntime")])
 
 # data.hznu.energy.tryCluster<-data.hznu.teaching.energy.final[finalState=="cooling"&sumElec<=150,c("sdElec","meanElec","sumElec","runtime")]
-data.hznu.energy.tryCluster<-data.hznu.teaching.energy.std[finalState=="cooling"]#,"meanElec","sumElec","runtime")]
+#,"meanElec","sumElec","runtime")]
+
+####聚类对象选择####
+modeSelect<-"cooling"
+usePAM<-TRUE
+clusterAttr<-c("stdSumEuiElec","stdSdAllElec","stdRuntime")
+data.hznu.energy.tryCluster<-data.hznu.teaching.energy.std[finalState==modeSelect]
+
 ggplot(data=data.hznu.energy.tryCluster,aes(x=runtime))+geom_density()+scale_x_continuous(breaks = c(1:16))#+xlim(0,100)
 
-wssClusterEvaluate(data = data.hznu.energy.tryCluster[,c("stdSumElec","stdRuntime")],
+wssClusterEvaluate(data = data.hznu.energy.tryCluster[,..clusterAttr],
                    maxIter = 1000,maxK = 8)
 pamkClusterEvaluate(
-  data = data.hznu.energy.tryCluster[,c("stdSumElec","stdRuntime")],
+  data = data.hznu.energy.tryCluster[,..clusterAttr],
   criter = "ch",startK = 2,endK = 8)
 multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 # stat.energy.bestK<-NbClust(data=data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec","runtime")],
@@ -175,9 +185,9 @@ multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 #3或4类
 ####分类法一####
 #直接按照总体特征进行分类
-for(i in 2:6){
-energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,c(sprintf("stdH%d",8:22))],
-                  krange = i,criterion = "ch",critout = TRUE,usepam = FALSE)
+for(i in 3:7){
+energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,..clusterAttr],
+                  krange = i,criterion = "ch",critout = TRUE,usepam = usePAM)
 # energy.pamk
 data.hznu.energy.tryCluster$energyCluster<-energy.pamk$pamobject$clustering
 # data.hznu.energy.tryCluster$sdElec<-apply(data.hznu.energy.tryCluster[,c(sprintf("h%d",8:22))],
@@ -186,7 +196,7 @@ data.hznu.energy.tryCluster$energyCluster<-energy.pamk$pamobject$clustering
 stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
   count=length(labelRoomDay),
   runtime=mean(runtime,na.rm = TRUE),
-  sumElec=mean(sumElec,na.rm = TRUE),
+  sumUiElec=mean(sumUiElec,na.rm = TRUE),
   sdElec=sd(sumElec,na.rm = TRUE),
   meanElec=mean(meanElec,na.rm = TRUE),
   meanAcElec=mean(meanAcElec,na.rm = TRUE),
@@ -197,15 +207,16 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
   laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
   allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=energyCluster]
-stat.hznu.energy.tryCluster<-describeBy(x = data.hznu.energy.tryCluster[,c("meanAcElec","meanElec","sumElec")],
-                                        group = list(usageCluster=data.hznu.energy.tryCluster$clusterName,
-                                                     energyCluster=data.hznu.energy.tryCluster$energyCluster,
-                                                     acMode=data.hznu.energy.tryCluster$finalState),mat=TRUE)
-write.xlsx(x=stat.hznu.energy.tryCluster.descr,file=paste(i,"seq","noPAM","descr","EnergyPattern.xlsx",sep = "_"))
-write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,"seq","noPAM","EnergyPattern.xlsx",sep = "_"))
-ggsave(file=paste(i,"seq","noPAM","EnergyPattern_dist.png",sep = "_"),
+# stat.hznu.energy.tryCluster<-describeBy(x = data.hznu.energy.tryCluster[,c("meanAcElec","meanElec","sumElec")],
+#                                         group = list(usageCluster=data.hznu.energy.tryCluster$clusterName,
+#                                                      energyCluster=data.hznu.energy.tryCluster$energyCluster,
+#                                                      acMode=data.hznu.energy.tryCluster$finalState),mat=TRUE)
+write.xlsx(x=stat.hznu.energy.tryCluster.descr,
+           file=paste(i,modeSelect,"3var",ifelse(usePAM,"PAM","noPAM"),"descr","EnergyPattern.xlsx",sep = "_"))
+# write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,modeSelect,"3var",ifelse(usePAM,"PAM","noPAM"),"EnergyPattern.xlsx",sep = "_"))
+ggsave(file=paste(i,modeSelect,"3var",ifelse(usePAM,"PAM","noPAM"),"EnergyPattern_dist.png",sep = "_"),
        plot = ggplot(data=stat.hznu.energy.tryCluster.descr,
-                     aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point(),
+                     aes(x=runtime,y=sumUiElec,size=sdElec,color=meanElec))+geom_point(),
        width=8,height = 6,dpi = 100
        )
 }
