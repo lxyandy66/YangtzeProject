@@ -223,3 +223,38 @@ ggsave(file=paste(i,modeSelect,"3var",ifelse(usePAM,"PAM","noPAM"),"EnergyPatter
 
 ggplot(data.hznu.energy.tryCluster,aes(x=stdSdAllElec,color=clusterName))+geom_density()#+xlim(0,4)
 
+####ºØ∫œæ€¿‡####
+info.energy.clusterName<-as.data.table(read.xlsx(file = "HZNU_EnergyClusterMapping.xlsx",sheetIndex = 1))
+data.hznu.teaching.energy.std$energyCluster<- -1
+data.hznu.teaching.energy.std$energyClusterName<-""
+for(i in unique(data.hznu.teaching.energy.std$finalState)){
+  data.hznu.teaching.energy.std[finalState==i]$energyCluster<-pamk(
+    data.hznu.teaching.energy.std[finalState==i,..clusterAttr],
+    krange = 4,
+    criterion = "ch",
+    usepam = TRUE,
+    critout = TRUE
+  )$pamobject$clustering
+  for(j in unique(data.hznu.teaching.energy.std[finalState==i]$energyCluster)){
+    data.hznu.teaching.energy.std[finalState==i & energyCluster==j]$energyClusterName<-
+      info.energy.clusterName[finalState==i & patternCode==j]$patternName
+  }
+}
+stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
+  count=length(labelRoomDay),
+  finalState=unique(finalState),
+  energyClusterName=energyClusterName[1],
+  runtime=mean(runtime,na.rm = TRUE),
+  sumUiElec=mean(sumUiElec,na.rm = TRUE),
+  sdElec=sd(sumElec,na.rm = TRUE),
+  meanElec=mean(meanElec,na.rm = TRUE),
+  meanAcElec=mean(meanAcElec,na.rm = TRUE),
+  onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
+  forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
+  afternoonUsage=length(labelRoomDay[clusterName=="Afternoon"]),
+  daytimeUsage=length(labelRoomDay[clusterName=="Daytime"]),
+  laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
+  allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
+),by=paste(energyClusterName,finalState,sep = "_")]
+ggplot(data=stat.hznu.energy.tryCluster.descr,
+       aes(x=runtime,y=sumUiElec,size=sdElec,color=energyClusterName))+geom_point()+facet_wrap(~finalState)
