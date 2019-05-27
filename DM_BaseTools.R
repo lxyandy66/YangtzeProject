@@ -23,6 +23,10 @@ library(RODBC)
 library(RMySQL)
 library(factoextra)
 library(NbClust)
+library(C50)
+library(randomForest)
+library(adabag)
+library(kernlab)
 
 ####预处理部分####
 getMode <- function(x) {

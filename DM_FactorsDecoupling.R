@@ -17,9 +17,10 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
 
 ####训练集/测试集划分####
 
-for(i in unique(data.hznu.teaching.decoupling[finalState=="cooling"]$clusterName)){
+# for(i in unique(data.hznu.teaching.decoupling[finalState=="cooling"]$clusterName)){
+
   #分块处理
-  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="cooling" & clusterName==i]
+  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="cooling"]
   data.hznu.teaching.decoupling.selected$energyClusterName<-as.factor(data.hznu.teaching.decoupling.selected$energyClusterName)
   data.hznu.teaching.decoupling.selected$thermoPattern<-as.factor(data.hznu.teaching.decoupling.selected$thermoPattern)
   data.hznu.teaching.decoupling.selected$clusterName<-as.factor(data.hznu.teaching.decoupling.selected$clusterName)
@@ -33,23 +34,50 @@ for(i in unique(data.hznu.teaching.decoupling[finalState=="cooling"]$clusterName
   data.hznu.teaching.decoupling.training<-data.hznu.teaching.decoupling.selected[sub]
   data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
   
-  
-  tree.both<-rpart(energyClusterName~clusterName+thermoPattern+areaScale+modiSeason+runtime,
+  #CART决策树算法
+  tree.both<-rpart(energyClusterName~clusterName+areaScale+modiSeason,method = "class",parms=list(split="gini"),
                    data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
   # tree.both$cptable
   # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#最优剪枝
-  rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
+ 
+  # #C50
+  # tree.both<-C5.0(energyClusterName~thermoPattern+clusterName+areaScale+modiSeason,data=data.hznu.teaching.decoupling.training)
+  # 
+  #CTree
+  tree.both<-ctree(energyClusterName~clusterName+areaScale+modiSeason,
+                   data=data.hznu.teaching.decoupling.training)
+  rpartTrue2<-tree.both
   
+  # #随机森林
+  fit.forest<-cforest(energyClusterName~clusterName+areaScale+modiSeason+runtime,
+                           data=data.hznu.teaching.decoupling.training)
+  rpartTrue2<-fit.forest
+  
+  ####AdaBoost####
+  #这里有问题
+  tree.both<-boosting(energyClusterName~clusterName+areaScale+modiSeason+runtime,
+                      data=data.hznu.teaching.decoupling.training)
+  rpartTrue2<-tree.both
+  
+  ####SVM####
+  regm<-ksvm(energyClusterName~clusterName+areaScale,
+             data=data.hznu.teaching.decoupling.training,
+             kernel="vanilladot",type="C-bsvc",C=30,cross=10,prob.model=TRUE)
+  rpartTrue2<-regm
+  
+  
+  rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
   plot(rpartTrue2,main=i)
   
+  
+  ####以训练集验证####
+  rtree.training<-predict(rpartTrue2,data.hznu.teaching.decoupling.training)
+  confusionMatrix(table(rtree.training,data.hznu.teaching.decoupling.training$energyClusterName))
   ####以测试集验证####
   rtree.predict<-predict(rpartTrue2,data.hznu.teaching.decoupling.test)
   confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName))
-  # capture.output(
-  #   c(confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName)),asRules(tree.both)),
-  #   file =paste("HZNU_Decoupling_Cooling_决策树评估_bestCP.txt")
-  # )
-}
+  
+# }
 
 
 
