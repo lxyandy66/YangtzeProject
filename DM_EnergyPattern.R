@@ -257,4 +257,8 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=paste(energyClusterName,finalState,sep = "_")]
 ggplot(data=stat.hznu.energy.tryCluster.descr,
-       aes(x=runtime,y=sumUiElec,size=sdElec,color=energyClusterName))+geom_point()+facet_wrap(~finalState)
+       aes(x=runtime,y=sumUiElec,size=sdElec,color=energyClusterName))+
+  geom_point()+facet_wrap(~finalState)+theme_bw()+scale_size_area(range=c(0,50))
+ggplot(data=data.hznu.teaching.energy.std,
+       aes(x=energyClusterName,y=sumUiElec))+
+  geom_boxplot()+facet_wrap(~finalState)+theme_bw()

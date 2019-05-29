@@ -63,6 +63,13 @@ stat.use.clusterDescribe<-data.hznu.use.final[,.(
 stat.use.clusterDescribe.plot<-melt(stat.use.clusterDescribe[,-c("count","runtime")],id.vars = c("clusterName"))
 ggplot(data = stat.use.clusterDescribe.plot,aes(x=variable,y=value,group=clusterName,color=clusterName,shape=clusterName))+geom_point()+geom_line()
 
+stat.use.yearDist<-data.hznu.use.final[,.(usagePattern=clusterName[1],
+                                          count=length(clusterName),
+                                          modiSeason=modiSeason[1],
+                                          finalState=finalState[1]
+                                          ),
+                                       by=labelSeasonUsageState<-paste(modiSeason,finalState,clusterName,sep = "_")]
+
 
 #转换为因子的预处理
 modeSelect<-"cooling"
