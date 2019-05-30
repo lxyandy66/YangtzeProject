@@ -15,19 +15,22 @@ data.hznu.teaching.decoupling<-
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
 
+
 ####训练集/测试集划分####
 
 # for(i in unique(data.hznu.teaching.decoupling[finalState=="cooling"]$clusterName)){
 
   #分块处理
-  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="cooling"&modiSeason=="Summer_warm"]
+  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="heating"]
+  ggplot(data=data.hznu.teaching.decoupling.selected,aes(x=runtime,color=clusterName))+geom_density()
   data.hznu.teaching.decoupling.selected$energyClusterName<-as.factor(data.hznu.teaching.decoupling.selected$energyClusterName)
   data.hznu.teaching.decoupling.selected$thermoPattern<-as.factor(data.hznu.teaching.decoupling.selected$thermoPattern)
   data.hznu.teaching.decoupling.selected$clusterName<-as.factor(data.hznu.teaching.decoupling.selected$clusterName)
   data.hznu.teaching.decoupling.selected$areaScale<-as.factor(data.hznu.teaching.decoupling.selected$areaScale)
   data.hznu.teaching.decoupling.selected$modiSeason<-as.factor(data.hznu.teaching.decoupling.selected$modiSeason)
-  data.hznu.teaching.decoupling.selected$runtimeClass<-
-  data.hznu.teaching.decoupling.selected$runtime<-as.factor(data.hznu.teaching.decoupling.selected$runtime)
+  data.hznu.teaching.decoupling.selected$runtimeClass<-(apply(X=data.hznu.teaching.decoupling.selected[,c("runtime")],
+                                                             MARGIN = 1,FUN = getRuntimeClass))
+  # data.hznu.teaching.decoupling.selected$runtime<-as.factor(data.hznu.teaching.decoupling.selected$runtime)
   
   ####训练集/测试集划分####
   set.seed(711)
@@ -36,23 +39,23 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
   data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
   
   #CART决策树算法
-  tree.both<-rpart(energyClusterName~clusterName+areaScale+modiSeason,method = "class",parms=list(split="gini"),
+  tree.both<-rpart(energyClusterName~clusterName+areaScale+modiSeason+runtimeClass,cp=0.0055,
                    data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
   rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
   plot(rpartTrue2)
   # tree.both$cptable
   # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#最优剪枝
  
-  # #C50
-  # tree.both<-C5.0(energyClusterName~thermoPattern+clusterName+areaScale+modiSeason,data=data.hznu.teaching.decoupling.training)
+  #C50
+  tree.both<-C5.0.formula(energyClusterName~clusterName+areaScale+modiSeason+runtime,data=data.hznu.teaching.decoupling.training)
   # 
   #CTree
-  tree.both<-ctree(energyClusterName~clusterName+areaScale+modiSeason,
+  tree.both<-ctree(energyClusterName~clusterName+areaScale+modiSeason+runtime,
                    data=data.hznu.teaching.decoupling.training)
   rpartTrue2<-tree.both
   
   # #随机森林
-  fit.forest<-cforest(energyClusterName~clusterName+areaScale+runtime,
+  fit.forest<-randomForest(energyClusterName~clusterName+areaScale+modiSeason+runtime,
                            data=data.hznu.teaching.decoupling.training,ntree=1000)
   rpartTrue2<-fit.forest
   
@@ -76,9 +79,15 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
   ####以训练集验证####
   rtree.training<-predict(rpartTrue2,data.hznu.teaching.decoupling.training)
   confusionMatrix(table(rtree.training,data.hznu.teaching.decoupling.training$energyClusterName))
+  capture.output(c(confusionMatrix(table(rtree.training,data.hznu.teaching.decoupling.training$energyClusterName)),
+                   asRules(tree.both)),
+                 file =paste("HZNU_行为_制热_训练集_决策树评估.txt"))
   ####以测试集验证####
   rtree.predict<-predict(rpartTrue2,data.hznu.teaching.decoupling.test)
   confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName))
+  capture.output(c(confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName)),
+                   asRules(tree.both)),
+                 file =paste("HZNU_行为_制热_预测集_决策树评估.txt"))
   rm(rpartTrue2)
   
 # }
@@ -95,3 +104,16 @@ getAreaLevel<-function(acCount){
   if(acCount<=16)
     return("Large")
 }
+  
+  
+  
+####获取空调运行时间等级####
+getRuntimeClass<-function(time){
+  if(time<3)
+    return("<3")
+  if(time<6)
+    return("[3,6)")    
+  if(time<10)
+    return("[6,10)")
+  return(">=10")
+  }
