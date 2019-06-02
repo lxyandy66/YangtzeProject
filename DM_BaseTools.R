@@ -258,7 +258,7 @@ outlierModify<-function (data,ac_code){
   }
 }
 
-#该方法有问题，该指标暂时不使用
+
 ####用于将室内温度分为高温及低温两类并计算比例####
 tempRatioSplit<-function(tempSeq){
   tempSeq<-na.omit(tempSeq)
@@ -273,4 +273,13 @@ tempRatioSplit<-function(tempSeq){
     return(as.matrix(stat[,2:4],byrow = TRUE,ncol = 2))
   },error=function(e){cat("ERROR :",conditionMessage(e),"at First seq: ",tempSeq[1],"\n")})
   
+}
+
+####计算水蒸气分压力的函数####
+getWaterVp<-function(x){
+  return(
+    exp(
+      (-5800.2206/(x+273.15))+1.3914993+(-0.048640239*(x+273.15))+(0.41764768*10^-4)*(x+273.15)^2+6.5459673*log(x+273.15)
+    )
+  )
 }
