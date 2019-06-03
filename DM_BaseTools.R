@@ -1,4 +1,4 @@
-####¸Ã½Å±¾ÓÃÓÚ¿ÎÌâ·ÖÎöÖĞÍ¨ÓÃĞÍ²ÎÊıµÄ´¦Àí¼°²¿·Öº¯Êı¼ÓÔØ####
+####?Ã½Å±????Ú¿?????????Í¨???Í²????Ä´??ï¿½ï¿½ï¿½???Öº???????####
 library(data.table)
 library(fpc)
 library(cluster)
@@ -28,7 +28,7 @@ library(randomForest)
 library(adabag)
 library(kernlab)
 
-####Ô¤´¦Àí²¿·Ö####
+####Ô¤???ï¿½ï¿½ï¿½??####
 getMode <- function(x) {
   ux <- unique(x)
   tab <- tabulate(match(x, ux))
@@ -37,8 +37,8 @@ getMode <- function(x) {
 
 
 getSeason<-function(month){
-  #ÓÉÔÂ·İ»ñÈ¡¼¾½Ú
-  #Òì³£²¿·Ö
+  #???Â·İ»?È¡????
+  #?ì³£????
   if(month<1|month>12){
     if(!is.numeric(month)){
       warning(paste(month," not a numeric, NA is returned",sep = ""),immediate. = TRUE)
@@ -68,7 +68,7 @@ getSeason<-function(month){
 
 
 getMonthPeriod<-function(month){
-  #»ñÈ¡ÔÂÑ®
+  #??È¡??Ñ®
   if(month%in% c(1:10))
     return("1st")
   else
@@ -81,8 +81,8 @@ getMonthPeriod<-function(month){
   return(NA)
 }
 
-####¾ÛÀàÏà¹Ø####
-##  ¹Õµã·¨Çó×î¼Ñ¾ÛÀàÊı
+####????????####
+##  ?Õµã·¨?????Ñ¾?????
 wssClusterEvaluate <- function(data,
                                maxIter = 1000,
                                maxK = 20) {
@@ -101,7 +101,7 @@ wssClusterEvaluate <- function(data,
   return(wss)
 }
 
-##  ·Ö¸îËã·¨Çó×î¼Ñ¾ÛÀàÊı£¬Ê¹ÓÃpamk·½·¨
+##  ?Ö¸??ã·¨?????Ñ¾???????Ê¹??pamk????
 pamkClusterEvaluate <-
   function(data,
            startK = 2,
@@ -117,7 +117,7 @@ pamkClusterEvaluate <-
       )
     return(pamk.best)
   }
-#Calinsky±ê×¼
+#Calinsky??×¼
 # calinskyClusterEvaluate(data) {
 #   require(vegan)
 #   fit <-
@@ -140,7 +140,7 @@ gapClusterEvaluate <- function(data, kMax = 15, b = 10) {
   fviz_gap_stat(gap_cluster)
 }
 
-#¶àÖ¸±ê·¨
+#??Ö¸?ê·¨
 multiplyClusterEvaluate <- function(data,methodSelected="wss") {
   fviz_nbclust(
     data,
@@ -150,11 +150,11 @@ multiplyClusterEvaluate <- function(data,methodSelected="wss") {
     diss = dist(data)
   )
 }
-# ´íÎó: Ê¸Á¿ÄÚ´æÓÃÍêÁË(´ïµ½ÁË¼«ÏŞ?)£¬Õâ¸ö·½·¨²»ĞĞ
+# ????: Ê¸ï¿½ï¿½?Ú´???????(?ïµ½?Ë¼????)??????????????
 
-####¸ººÉ¹ÀËãµÈ·½·¨####
+####???É¹????È·???####
 getEstCoolingLoad<-function(outTemp,hour){
-  #Õâ¸öÄâºÏ¹«Ê½¿Ï¶¨ÓĞÎÊÌâ
+  #???????Ï¹?Ê½?Ï¶???????
   if(hour>19){
     param<-c(6.0349,2.3776,289.6508)
   }else if(hour>14){
@@ -171,7 +171,7 @@ getEstCoolingLoad<-function(outTemp,hour){
 }
 
 
-####ÓÃÓÚ»Ø¹éÕï¶ÏµÈµÄº¯Êı####
+####???Ú»Ø¹????ÏµÈµÄº???####
 hat.plot <- function(fit){
   p <- length(coefficients(fit))
   n <- length(fitted(fit))
@@ -212,7 +212,7 @@ getMaxPredictError<-function(yPred,yLook){
   return(max(abs((yLook-yPred)/yLook)))
 }
 
-####»ñÈ¡·Ö¸î×Ö·û´®ºó¸÷³ÉÔ±####
+####??È¡?Ö¸??Ö·?????????Ô±####
 getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   nn<-unlist(strsplit(x,split = splitSimbol))
   if(!isLastOne){
@@ -220,30 +220,30 @@ getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   }else{
     return(nn[length(nn)])
   }
-}##!!!!applyÖĞ³öÏÖÁËÎÊÌâ
+}##!!!!apply?Ğ³?????????
 
-####Òì³£Öµ´¦Àí·½·¨####
-#»ùÓÚ¾ÛÀà·½·¨£¬¶ÔÊ±ĞòÎÂ¶ÈÊı¾İ½øĞĞ¾ÛÀà£¬È¡³ö¾ÛÀàÑù±¾×î¶àµÄÀàĞÍ
-#1¡¢¸ù¾İÊ±ĞòÎÂ¶È½øĞĞ¾ÛÀà
-#2¡¢Í³¼Æ¸÷¾ÛÀàÑù±¾Êı£¬µÃµ½×î´ó¾ÛÀà
-#3¡¢½«º¬×î´ó¾ÛÀàÕ¼±È¶àµÄac_code¶ÔÓ¦¼ÇÂ¼±£Áô£¬ÆäËûºöÂÔ
-#tip:½öÓÃÓÚÃ»ÓĞÈ±Ê§ÖµµÄ¿íÊı¾İ
+####?ì³£Öµ???ï¿½ï¿½ï¿½??####
+#???Ú¾??à·½??????Ê±???Â¶????İ½??Ğ¾??à£¬È¡????????????????????
+#1??????Ê±???Â¶È½??Ğ¾???
+#2??Í³?Æ¸??????????????Ãµ?????????
+#3??????????????Õ¼?È¶???ac_code??Ó¦??Â¼??????????????
+#tip:??????Ã»??È±Ê§Öµ?Ä¿?????
 outlierWidSeqModify<-function (tempSeq,ac_code){
-  #Ó¦´«Èë¿íÊı¾İ
-  #¼òµ¥¼ì²é
+  #Ó¦??????????
+  #?òµ¥¼???
   if(nrow(as.data.table(ac_code))!=nrow(as.data.table(tempSeq))){
     warning("length not same",immediate. = TRUE)
     return(NA)
   }
-  #ºÏ²¢Êı¾İ¼¯
+  #?Ï²????İ¼?
   temp.outlier<-data.table(tempSeq,acCode=ac_code,
                            outlierCluster=pamk(data=tempSeq,krange=2,criterion = "ch")$pamobject$clustering)
   return(temp.outlier[outlierCluster==getMode(temp.outlier$outlierCluster)]$acCode)
 }
 
-#ÊÊÓÃÓÚ³¤Êı¾İ£¬Ğ§¹ûÏà¶Ô¿íÊı¾İ²»Ãô¸Ğ£¬µ«ÔÊĞíÈ±Ê§Öµ
+#?????Ú³????İ£?Ğ§?????Ô¿????İ²????Ğ£???????È±Ê§Öµ
 outlierModify<-function (data,ac_code){
-  #Ó¦´«Èë³¤Êı¾İ
+  #Ó¦???ë³¤????
   data<-na.omit(data)
   temp.outlier<-data.table(dt=data,acCode=ac_code,
                            outlierCluster=pamk(data,krange=2,criterion = "ch")$pamobject$clustering)
@@ -259,7 +259,7 @@ outlierModify<-function (data,ac_code){
 }
 
 
-####ÓÃÓÚ½«ÊÒÄÚÎÂ¶È·ÖÎª¸ßÎÂ¼°µÍÎÂÁ½Àà²¢¼ÆËã±ÈÀı####
+####???Ú½??????Â¶È·?Îª???Â¼?????ï¿½ï¿½?à²¢????????####
 tempRatioSplit<-function(tempSeq){
   tempSeq<-na.omit(tempSeq)
   data<-data.table(dt=tempSeq)
@@ -275,11 +275,16 @@ tempRatioSplit<-function(tempSeq){
   
 }
 
-####¼ÆËãË®ÕôÆø·ÖÑ¹Á¦µÄº¯Êı####
+####????Ë®??????Ñ¹ï¿½ï¿½?Äº???####
 getWaterVp<-function(x){
   return(
     exp(
       (-5800.2206/(x+273.15))+1.3914993+(-0.048640239*(x+273.15))+(0.41764768*10^-4)*(x+273.15)^2+6.5459673*log(x+273.15)
     )
   )
+}
+
+
+fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
+  return(as.POSIXct(round(as.numeric(x)/invl)*invl,origin=originTime))
 }

@@ -37,8 +37,50 @@ names(data.weather.raw)<-c( "date","time","temp1","temp2","temp3","temp4","temp5
 data.weather.raw[,c("temp1","temp2","temp3","temp4","temp5")]<-NULL
 data.weather.station.raw<-data.weather.raw
 #暂存
-save(data.weather.station.raw,file="HZ_气象站数据.rdata")
+# save(data.weather.station.raw,file="HZ_气象站数据.rdata")
+data.weather.station.raw[,c("light","lat","rainSum","pressure")]<-NULL
+#变量格式转换
+data.weather.station.raw.merge<-data.weather.station.raw
+# data.weather.station.raw.merge<-cbind(data.weather.station.raw[,1:2],as.matrix(data.weather.station.raw[,3:14],ncol=length(3:14)))#这个也可以转成char
+# data.weather.station.raw.merge<-as.data.table(unfactor(as.data.frame(data.weather.station.raw.merge)))#????用这个包让我宛如一个智障🌚
+data.weather.station.raw.merge[,3:14]<-lapply(data.weather.station.raw.merge[,3:14], FUN = function(x){ as.numeric(as.character(x))} )#lapply???怎么可以 apply不行
 
+
+ggplot(data=melt(data.weather.station.raw.merge[curRad1!=0&curRad2!=0,c("date","time","curRad1","curRad2")],
+                 id.vars = c("date","time")),aes(x=value,color=variable))+geom_density()
+ggplot(data=data.weather.station.raw.merge[curRad1!=0],aes(x=curRad1))+geom_density()
+
+# > table(data.weather.station.raw.merge$curRad2)#这个数据没什么好要的了🌚
+# 0    26    40    63   177   235   256   273   350   410   447   455   488   548   555   606   623   687   901   941   982  1009  1034  1053  1060 
+# 1805     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1 
+# 1155  1181  1197  1245  1247  1250  1285  1312  1355  1381  1433  1469  1497  1515  1541  1599  1631  1756  1764  1784  1841  1865  1894  1917  1928 
+# 1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1     1 
+# 2197  2208  2228  2239  2262  2265  2296  2312  2349 
+# 1     1     1     1     1     1     1     1   20213 
+#再去除变量
+data.weather.station.raw.merge$curRad2<-NULL
+
+#### 时间轴整理####
+data.weather.station.raw.merge$originDatetime<-as.POSIXct(paste(data.weather.station.raw.merge$date,
+                                                          data.weather.station.raw.merge$time,sep = " "))
+data.weather.station.raw.merge$datetime<-lapply(X = data.weather.station.raw.merge[,c("originDatetime")],FUN = fixTimeInterval,invl=600)#切记apply要看结果
+
+####合并至小时级别####
+setorder(data.weather.station.raw.merge,datetime)
+data.weather.station.raw.merge$labelHour<-format(data.weather.station.raw.merge$datetime,format = "%Y-%m-%d_%H")
+data.weather.station.final<-data.weather.station.raw.merge[,.(datetime=datetime[1],
+                                                              outTemp=mean(outTemp,na.rm = TRUE),
+                                                              rhOut=mean(rhOut,na.rm = TRUE),
+                                                              dewTemp=mean(dewTemp,na.rm = TRUE),
+                                                              windDir=mean(windDir,na.rm = TRUE),
+                                                              windSpeed=mean(meanWind10Min,na.rm = TRUE),
+                                                              curRad=mean(curRad1,na.rm = TRUE),
+                                                              sumRad1=max(sumRad1,na.rm = TRUE),
+                                                              sumRad2=max(sumRad2,na.rm = TRUE),
+                                                              sunTime=max(sunTime,na.rm = TRUE)
+                                                              ),by=labelHour]
+data.weather.station.final$labelHour<-NULL
+#ZJU气象站最终：data.weather.station.final
 
 ####处理萧山机场气象数据集####
 #从MySQL导入
@@ -161,6 +203,64 @@ data.weather.airport.final<-data.weather.airport.raw.merge[,.(
 ),by=labelHour]
 data.weather.airport.final[,c("datetime","outTemp","dewTemp","rhOut","windDir","windSpeed","weather")]
 save(data.weather.airport.final,data.weather.airport.raw.merge,file="HZ_2016-2019机场逐时气象.rdata")
+#全球气象数据机场最终：data.weather.airport.final
 
 
+####ZYP大棚辐射数据####
+data.weather.zyp.raw<-data.table(read.csv(file = "粗处理_2018太阳辐射（截至6.14）.csv"))
+#删去一些变量
+data.weather.zyp.raw[,c("temp1","temp2","temp3","temp4","temp5")]<-NULL
+data.weather.zyp.raw[,c("rhEarth","obs","obsMean10Min","CO2","compass","windSpeed","WindDir","meanWind2Min","meanWind10Min","lat","pressure","dewTemp")]<-NULL
+data.weather.zyp.raw[,c("rhOut","outTemp","rainSum","elec")]<-NULL
 
+####时间轴的处理####
+#其部分数据按月存在误差
+data.weather.zyp.raw$datetime<-as.POSIXct(data.weather.zyp.raw$X...datetime)#原始居然是一分钟为时间间隔
+data.weather.zyp.raw$month<-format(data.weather.zyp.raw$datetime,format = "%m")
+data.weather.zyp.raw$rangeRatio<-apply(X=data.weather.zyp.raw[,c("curRad1","curRad2")],MARGIN = 1,FUN = rangeRatio)
+ggplot(data=data.weather.zyp.raw[rangeRatio>0.85],aes(x=rangeRatio))+geom_density()
+
+#将异常值设为缺失
+ggplot(data = melt(data.weather.zyp.raw[curRad1!=0&curRad2!=0,c("X...datetime","curRad1","curRad2")],
+                   id.vars = c("X...datetime")),aes(x=value,color=variable))+geom_density()#+xlim(1000,3000)
+data.weather.zyp.raw[curRad1==2500]$curRad1<-NA
+data.weather.zyp.raw[curRad2==2205]$curRad2<-NA
+data.weather.zyp.raw[curRad2>1000]$curRad2<-NA #大于1000就4个值
+# curRad2值相对较好
+
+#辐射数据清洗
+data.weather.zyp.raw$curRad<-apply(data.weather.zyp.raw[,c("curRad1","curRad2","rangeRatio")],
+                                   MARGIN = 1,FUN = function(x){
+                                     if(is.nan(x[3])|is.na(x[3])){
+                                       return(NA)
+                                     }
+                                     if(x[3]>0.9){
+                                        return(max(c(x[1],x[2]),na.rm = TRUE))
+                                     }
+                                     return(mean(c(x[1],x[2]),na.rm = TRUE))
+                                  })
+ggplot(data.weather.zyp.raw,aes(x=curRad,color=month))+geom_density()
+data.weather.zyp.raw[month %in% c("01","02") & curRad>1000]$curRad<-NA#很少，ZYP说是异常
+
+####整合至小时级别####
+setorder(data.weather.zyp.raw,datetime)
+data.weather.zyp.raw$labelHour<-format(data.weather.zyp.raw$datetime,format = "%Y-%m-%d_%H")
+data.weather.zyp.final<-data.weather.zyp.raw[,.(sumRad1=max(sumRad1,na.rm = TRUE),
+                                                sumRad2=max(sumRad2,na.rm = TRUE),
+                                                curRad=mean(curRad,na.rm = TRUE)
+                                                ),by=labelHour]
+data.weather.zyp.final$datetime<-as.POSIXct(paste(data.weather.zyp.final$labelHour,":00:00",sep = ""),
+                                        format="%Y-%m-%d_%H:%M:%S")
+data.weather.zyp.final<-data.weather.zyp.final[,c("datetime","sumRad1","sumRad2","curRad")]
+data.weather.zyp.final[is.nan(curRad)]$curRad<-NA
+#ZYP最终：data.weather.zyp.final
+
+####数据完整度统计####
+stat.weather.zyp<-data.weather.zyp.final[,.(count=length(!is.na(curRad)),
+                                            month=unique(format(datetime,format="%Y-%m")),
+                                            source="ZYP"
+                                            ),by=(date=format(datetime,format="%Y-%m-%d"))]
+stat.weather.station<-data.weather.station.final[,.(count=length(!is.na(curRad)),
+                                            month=unique(format(datetime,format="%Y-%m")),
+                                            source="STATION"
+                                            ),by=(date=format(datetime,format="%Y-%m-%d"))]
