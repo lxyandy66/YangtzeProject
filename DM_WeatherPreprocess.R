@@ -134,9 +134,33 @@ data.weather.airport.raw.merge<-rbind(data.weather.airport.raw,nn,nn1)
 # rm(data.weather.airport.raw.merge)
 
 ####处理完成，数据合并及导出####
-data.weather.airport.final<-
+data.weather.airport.raw.merge<-
   data.weather.airport.raw.merge[,c("datetime","DATE","REPORT_TYPE","outTemp","dewTemp","rhOut","windDir","windSpeed","weather1","weather2")]
 #缺失值的设置
-data.weather.airport.final[windSpeed==999.9]$windSpeed<-NA
-data.weather.airport.final[weather1=="NULL"]$weather1<-NA
-data.weather.airport.final[weather2=="NULL"]$weather2<-NA
+data.weather.airport.raw.merge[windSpeed==999.9]$windSpeed<-NA
+data.weather.airport.raw.merge[weather1=="NULL"]$weather1<-NA
+data.weather.airport.raw.merge[weather2=="NULL"]$weather2<-NA
+data.weather.airport.raw.merge[outTemp==999.9]$outTemp<-NA
+data.weather.airport.raw.merge[dewTemp==999.9]$dewTemp<-NA
+data.weather.airport.raw.merge[is.na(outTemp)]$rhOut<-NA
+#合并至小时值
+data.weather.airport.raw.merge$labelHour<-format(data.weather.airport.raw.merge$datetime,format = "%Y-%m-%d_%H")
+setorder(data.weather.airport.raw.merge,datetime,REPORT_TYPE)
+#统计一下
+stat.hour<-data.weather.airport.raw.merge[,.(count=length(datetime)),by=labelHour]
+#合并至小时并导出
+data.weather.airport.final<-data.weather.airport.raw.merge[,.(
+  DATE=DATE[1],
+  datetime=datetime[1],
+  outTemp=mean(outTemp,na.rm = TRUE),
+  dewTemp=mean(dewTemp,na.rm = TRUE),
+  rhOut=mean(rhOut,na.rm = TRUE),
+  windDir=mean(windDir[windDir!=999],na.rm = TRUE),
+  windSpeed=mean(windSpeed,na.rm = TRUE),
+  weather=getMode(c(weather1[!is.na(weather1)],weather2[!is.na(weather2)]))
+),by=labelHour]
+data.weather.airport.final[,c("datetime","outTemp","dewTemp","rhOut","windDir","windSpeed","weather")]
+save(data.weather.airport.final,data.weather.airport.raw.merge,file="HZ_2016-2019机场逐时气象.rdata")
+
+
+
