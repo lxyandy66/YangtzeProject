@@ -242,6 +242,8 @@ data.weather.zyp.raw$curRad<-apply(data.weather.zyp.raw[,c("curRad1","curRad2","
 ggplot(data.weather.zyp.raw,aes(x=curRad,color=month))+geom_density()
 data.weather.zyp.raw[month %in% c("01","02") & curRad>1000]$curRad<-NA#很少，ZYP说是异常
 
+#检查一下数据量
+nn<- (data.weather.zyp.raw %>% cbind(.,date=substr(.$labelHour,1,10)))[,.(hourCount=length(unique(labelHour[!is.na(curRad)]))),by=date]
 ####整合至小时级别####
 setorder(data.weather.zyp.raw,datetime)
 data.weather.zyp.raw$labelHour<-format(data.weather.zyp.raw$datetime,format = "%Y-%m-%d_%H")
@@ -253,14 +255,26 @@ data.weather.zyp.final$datetime<-as.POSIXct(paste(data.weather.zyp.final$labelHo
                                         format="%Y-%m-%d_%H:%M:%S")
 data.weather.zyp.final<-data.weather.zyp.final[,c("datetime","sumRad1","sumRad2","curRad")]
 data.weather.zyp.final[is.nan(curRad)]$curRad<-NA
+data.weather.zyp.final[is.na(curRad)&format(datetime,format="%H") %in% sprintf("%02d",c(17:23,00:06))]$curRad<-0
 #ZYP最终：data.weather.zyp.final
 
 ####数据完整度统计####
-stat.weather.zyp<-data.weather.zyp.final[,.(count=length(!is.na(curRad)),
-                                            month=unique(format(datetime,format="%Y-%m")),
-                                            source="ZYP"
-                                            ),by=(date=format(datetime,format="%Y-%m-%d"))]
-stat.weather.station<-data.weather.station.final[,.(count=length(!is.na(curRad)),
-                                            month=unique(format(datetime,format="%Y-%m")),
-                                            source="STATION"
-                                            ),by=(date=format(datetime,format="%Y-%m-%d"))]
+stat.weather.complete<-data.weather.zyp.final %>% 
+                       cbind(date=format(.$datetime,format="%Y-%m-%d"),
+                            hour=format(.$datetime,format="%H")) %>% 
+                       .[,.(fullCount=length(datetime[!is.na(curRad)]),
+                            workHourCount=length(datetime[!is.na(curRad)& hour %in% sprintf("%02d",8:22)]),
+                            month=unique(format(datetime,format="%Y-%m")),
+                            source="ZYP"),by=date]%>% 
+                       rbind(.,
+                             data.weather.station.final%>% 
+                               cbind(date=format(.$datetime,format="%Y-%m-%d"),
+                                     hour=format(.$datetime,format="%H")) %>% 
+                               .[,.(fullCount=length(datetime[!is.na(curRad)]),
+                                    workHourCount=length(datetime[!is.na(curRad)& hour %in% sprintf("%02d",8:22)]),
+                                    month=unique(format(datetime,format="%Y-%m")),
+                                    source="STATION"
+                                    ),by=date])
+write.xlsx(x=stat.weather.complete,file = "Weather_checkComplete.xlsx")
+ggplot(data = stat.weather.complete,
+       aes(x=date,y=workHourCount,color=source,shape=source,group=source))+geom_point()+geom_line()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))

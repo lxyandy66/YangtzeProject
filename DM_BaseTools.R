@@ -288,3 +288,7 @@ getWaterVp<-function(x){
 fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
   return(as.POSIXct(round(as.numeric(x)/invl)*invl,origin=originTime))
 }
+
+rangeRatio<-function(x){
+  return(1-(min(x)/max(x)))
+}
