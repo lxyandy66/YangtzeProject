@@ -1,4 +1,4 @@
-####?媒疟????诳?????????通???筒????拇??锟斤拷锟????趾???????####
+####该脚本用于课题分析中通用型参数的处理及部分函数加载####
 library(data.table)
 library(fpc)
 library(cluster)
@@ -29,7 +29,7 @@ library(adabag)
 library(kernlab)
 library(magrittr)
 
-####预???锟斤拷锟???####
+####预处理部分####
 getMode <- function(x) {
   ux <- unique(x)
   tab <- tabulate(match(x, ux))
@@ -38,8 +38,8 @@ getMode <- function(x) {
 
 
 getSeason<-function(month){
-  #???路莼?取????
-  #?斐?????
+  #由月份获取季节
+  #异常部分
   if(month<1|month>12){
     if(!is.numeric(month)){
       warning(paste(month," not a numeric, NA is returned",sep = ""),immediate. = TRUE)
@@ -69,7 +69,7 @@ getSeason<-function(month){
 
 
 getMonthPeriod<-function(month){
-  #??取??旬
+  #获取月旬
   if(month%in% c(1:10))
     return("1st")
   else
@@ -82,8 +82,8 @@ getMonthPeriod<-function(month){
   return(NA)
 }
 
-####????????####
-##  ?盏惴??????丫?????
+####聚类相关####
+##  拐点法求最佳聚类数
 wssClusterEvaluate <- function(data,
                                maxIter = 1000,
                                maxK = 20) {
@@ -93,7 +93,7 @@ wssClusterEvaluate <- function(data,
     wss[i] <-
       sum(kmeans(data, centers = i, iter.max = maxIter)$withinss)
     cat(i,"  clusters  ",wss[i],"\n")
-    }
+  }
   plot(1:maxK,
        wss,
        type = "o",
@@ -102,7 +102,7 @@ wssClusterEvaluate <- function(data,
   return(wss)
 }
 
-##  ?指??惴??????丫???????使??pamk????
+##  分割算法求最佳聚类数，使用pamk方法
 pamkClusterEvaluate <-
   function(data,
            startK = 2,
@@ -118,7 +118,7 @@ pamkClusterEvaluate <-
       )
     return(pamk.best)
   }
-#Calinsky??准
+#Calinsky标准
 # calinskyClusterEvaluate(data) {
 #   require(vegan)
 #   fit <-
@@ -141,7 +141,7 @@ gapClusterEvaluate <- function(data, kMax = 15, b = 10) {
   fviz_gap_stat(gap_cluster)
 }
 
-#??指?攴?
+#多指标法
 multiplyClusterEvaluate <- function(data,methodSelected="wss") {
   fviz_nbclust(
     data,
@@ -151,11 +151,11 @@ multiplyClusterEvaluate <- function(data,methodSelected="wss") {
     diss = dist(data)
   )
 }
-# ????: 矢锟斤拷?诖???????(?锏??思????)??????????????
+# 错误: 矢量内存用完了(达到了极限?)，这个方法不行
 
-####???晒????确???####
+####负荷估算等方法####
 getEstCoolingLoad<-function(outTemp,hour){
-  #???????瞎?式?隙???????
+  #这个拟合公式肯定有问题
   if(hour>19){
     param<-c(6.0349,2.3776,289.6508)
   }else if(hour>14){
@@ -172,7 +172,7 @@ getEstCoolingLoad<-function(outTemp,hour){
 }
 
 
-####???诨毓????系鹊暮???####
+####用于回归诊断等的函数####
 hat.plot <- function(fit){
   p <- length(coefficients(fit))
   n <- length(fitted(fit))
@@ -213,7 +213,7 @@ getMaxPredictError<-function(yPred,yLook){
   return(max(abs((yLook-yPred)/yLook)))
 }
 
-####??取?指??址?????????员####
+####获取分割字符串后各成员####
 getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   nn<-unlist(strsplit(x,split = splitSimbol))
   if(!isLastOne){
@@ -221,37 +221,37 @@ getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
   }else{
     return(nn[length(nn)])
   }
-}##!!!!apply?谐?????????
+}##!!!!apply中出现了问题
 
-####?斐Ｖ????锟斤拷锟???####
-#???诰??喾???????时???露????萁??芯??啵?????????????????????
-#1??????时???露冉??芯???
-#2??统?聘??????????????玫?????????
-#3??????????????占?榷???ac_code??应??录??????????????
-#tip:??????没??缺失值?目?????
+####异常值处理方法####
+#基于聚类方法，对时序温度数据进行聚类，取出聚类样本最多的类型
+#1、根据时序温度进行聚类
+#2、统计各聚类样本数，得到最大聚类
+#3、将含最大聚类占比多的ac_code对应记录保留，其他忽略
+#tip:仅用于没有缺失值的宽数据
 outlierWidSeqModify<-function (tempSeq,ac_code){
-  #应??????????
-  #?虻ゼ???
+  #应传入宽数据
+  #简单检查
   if(nrow(as.data.table(ac_code))!=nrow(as.data.table(tempSeq))){
     warning("length not same",immediate. = TRUE)
     return(NA)
   }
-  #?喜????菁?
+  #合并数据集
   temp.outlier<-data.table(tempSeq,acCode=ac_code,
                            outlierCluster=pamk(data=tempSeq,krange=2,criterion = "ch")$pamobject$clustering)
   return(temp.outlier[outlierCluster==getMode(temp.outlier$outlierCluster)]$acCode)
 }
 
-#?????诔????荩?效?????钥????莶????校???????缺失值
+#适用于长数据，效果相对宽数据不敏感，但允许缺失值
 outlierModify<-function (data,ac_code){
-  #应???氤?????
+  #应传入长数据
   data<-na.omit(data)
   temp.outlier<-data.table(dt=data,acCode=ac_code,
                            outlierCluster=pamk(data,krange=2,criterion = "ch")$pamobject$clustering)
   maxCluster<-ifelse(nrow(temp.outlier[outlierCluster==1])>
                        nrow(temp.outlier[outlierCluster==2]),1,2)
   temp.stat.outlier<-temp.outlier[,.(cluster1=length(dt[outlierCluster==1]),
-                                    cluster2=length(dt[outlierCluster==2])),by=acCode]
+                                     cluster2=length(dt[outlierCluster==2])),by=acCode]
   if(maxCluster==1){
     return(temp.stat.outlier[cluster1>=cluster2]$acCode)
   }else{
@@ -259,8 +259,7 @@ outlierModify<-function (data,ac_code){
   }
 }
 
-
-####???诮??????露确?为???录?????锟斤拷?嗖?????????####
+####用于将室内温度分为高温及低温两类并计算比例####
 tempRatioSplit<-function(tempSeq){
   tempSeq<-na.omit(tempSeq)
   data<-data.table(dt=tempSeq)
@@ -276,7 +275,7 @@ tempRatioSplit<-function(tempSeq){
   
 }
 
-####????水??????压锟斤拷?暮???####
+####计算水蒸气分压力####
 getWaterVp<-function(x){
   return(
     exp(
@@ -285,11 +284,13 @@ getWaterVp<-function(x){
   )
 }
 
-
+####将时间间隔四舍五入至标准间隔####
 fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
   return(as.POSIXct(round(as.numeric(x)/invl)*invl,origin=originTime))
 }
 
+
+####计算极差在最大值中的占比####
 rangeRatio<-function(x){
   return(1-(min(x)/max(x)))
 }

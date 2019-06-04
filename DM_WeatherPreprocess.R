@@ -303,7 +303,7 @@ data.weather.wdh.final<- data.weather.wdh.final %>%
 
 
 ####数据完整度统计####
-stat.weather.complete<-data.weather.zyp.final %>% 
+stat.weather.source<-data.weather.zyp.final %>% 
                        cbind(date=format(.$datetime,format="%Y-%m-%d"),
                             hour=format(.$datetime,format="%H")) %>% 
                        .[,.(fullCount=length(datetime[!is.na(curRad)]),
@@ -318,7 +318,25 @@ stat.weather.complete<-data.weather.zyp.final %>%
                                     workHourCount=length(datetime[!is.na(curRad)& hour %in% sprintf("%02d",8:22)]),
                                     month=unique(format(datetime,format="%Y-%m")),
                                     source="STATION"
-                                    ),by=date])
-write.xlsx(x=stat.weather.complete,file = "Weather_checkComplete.xlsx")
-ggplot(data = stat.weather.complete,
-       aes(x=date,y=workHourCount,color=source,shape=source,group=source))+geom_point()+geom_line()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+                                    ),by=date]) %>%
+                        rbind(.,data.weather.wdh.final %>% 
+                                cbind(date=format(.$datetime,format="%Y-%m-%d"),
+                                      hour=format(.$datetime,format="%H"))%>%
+                                .[,.(fullCount=length(datetime[!is.na(curRad)]),
+                                     workHourCount=length(datetime[!is.na(curRad)& hour %in% sprintf("%02d",8:22)]),
+                                     month=unique(format(datetime,format="%Y-%m")),
+                                     source="WDH"
+                                ),by=date])
+                              
+stat.weather.checkComplete<-data.table(date=seq.Date(from = as.Date("2016-10-27"),to = as.Date("2018-06-14"),by = "day"))
+stat.weather.checkComplete$month<-format(stat.weather.checkComplete$date,format="%Y-%m")
+stat.weather.source$date<-as.Date(stat.weather.source$date)
+stat.weather.checkComplete<-merge(stat.weather.checkComplete,stat.weather.source[,c("date","fullCount","workHourCount","source")],
+                                  all.x = TRUE,by.x = "date",by.y = "date")
+stat.weather.checkComplete[is.na(fullCount)]$fullCount<-0
+stat.weather.checkComplete[is.na(workHourCount)]$workHourCount<-0
+stat.weather.checkComplete[is.na(source)]$source<-"NULL"
+
+write.xlsx(x=stat.weather.checkComplete,file = "Weather_checkComplete.xlsx")
+ggplot(data = stat.weather.checkComplete,
+       aes(x=date,y=workHourCount,color=source,shape=source,group=source))+geom_point()+geom_line() #+theme(axis.text.x = element_text(angle = 90, hjust = 1))
