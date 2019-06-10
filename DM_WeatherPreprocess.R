@@ -83,20 +83,22 @@ data.weather.station.final$labelHour<-NULL
 #ZJU气象站原始最终：data.weather.station.final
 
 ####气象站数据插值####
-data.weather.station.modify<-data.table(date=as.Date(unique(substr(data.weather.station.final$datetime,1,10)))) %>% 
+data.weather.station.modify<-data.table(date=as.POSIXct(unique(substr(data.weather.station.final$datetime,1,10)))) %>% 
                               .[,.(datetime=date+dhours(0:23)),by=date] %>%
                               merge(x=,y=data.weather.station.final,all.x=TRUE,by.x = "datetime",by.y="datetime")%>%
                               as.data.table(.)
 data.weather.station.modify$isMod<-FALSE
 data.weather.station.modify[!complete.cases(data.weather.station.modify)]$isMod<-TRUE
 stat.weather.station.completeCheck<-data.weather.station.modify[isMod==TRUE,.(count=sum(isMod)),by=date]#有些24小时里缺失10来个的真的拯救不了了...
+
+# nn<-data.weather.station.modify[date=="2016-11-18"]
+# nn<-approxData(data=nn,colRange = 3:11)
+#缺失不大于10的还可以拯救一下
 for(i in stat.weather.station.completeCheck[count<=10]$date){
-  data.weather.station.modify[date==i]
+  data.weather.station.modify[date==i]<-approxData(data = data.weather.station.modify[date==i],colRange = 3:11)
 }
-nn<-data.weather.station.modify[date=="2016-11-18"]
-for(j in 3:11){
-  nn[,..j]<-na.approx(nn[,..j],na.rm = FALSE)
-}
+
+
 
 ####处理萧山机场气象数据集####
 #从MySQL导入
@@ -274,6 +276,25 @@ data.weather.zyp.final[is.nan(curRad)]$curRad<-NA
 data.weather.zyp.final[is.na(curRad)&format(datetime,format="%H") %in% sprintf("%02d",c(17:23,00:06))]$curRad<-0
 #ZYP最终：data.weather.zyp.final
 
+####ZYP数据插值####
+data.weather.zyp.modify<-data.table(date=as.POSIXct(unique(substr(data.weather.zyp.final$datetime,1,10)))) %>% 
+  .[,.(datetime=date+dhours(0:23)),by=date] %>%
+  merge(x=,y=data.weather.zyp.final,all.x=TRUE,by.x = "datetime",by.y="datetime")%>%
+  as.data.table(.)
+data.weather.zyp.modify$isMod<-FALSE
+data.weather.zyp.modify[!complete.cases(data.weather.zyp.modify)]$isMod<-TRUE
+stat.weather.zyp.completeCheck<-data.weather.zyp.modify[isMod==TRUE,.(count=sum(isMod)),by=date]#有些24小时里缺失10来个的真的拯救不了了...
+
+# nn<-data.weather.station.modify[date=="2016-11-18"]
+# nn<-approxData(data=nn,colRange = 3:11)
+#缺失不大于10的还可以拯救一下
+for(i in stat.weather.zyp.completeCheck[count<=10]$date){
+  data.weather.zyp.modify[date==i]<-approxData(data = data.weather.zyp.modify[date==i],colRange = 3:5)
+}
+
+
+
+
 
 ####WDH数据处理####
 fileName<-c("粗处理_WangDH_2018_02_05-2018_04_07.xls",
@@ -317,9 +338,25 @@ data.weather.wdh.final<- data.weather.wdh.final %>%
                          cbind(datetime=as.POSIXct(.$labelHour,format="%Y-%m-%d_%H")) %>% 
                          .[,c("datetime","windSpeed","meanWind2Min","meanWind10Min","curRad","sumRad")]
 
+####WDH数据插值####
+data.weather.wdh.modify<-data.table(date=as.POSIXct(unique(substr(data.weather.wdh.final$datetime,1,10)))) %>% 
+  .[,.(datetime=date+dhours(0:23)),by=date] %>%
+  merge(x=,y=data.weather.wdh.final,all.x=TRUE,by.x = "datetime",by.y="datetime")%>%
+  as.data.table(.)
+data.weather.wdh.modify$isMod<-FALSE
+data.weather.wdh.modify[!complete.cases(data.weather.wdh.modify)]$isMod<-TRUE
+stat.weather.wdh.completeCheck<-data.weather.wdh.modify[isMod==TRUE,.(count=sum(isMod)),by=date]#有些24小时里缺失10来个的真的拯救不了了...
+
+# nn<-data.weather.station.modify[date=="2016-11-18"]
+# nn<-approxData(data=nn,colRange = 3:11)
+#缺失不大于10的还可以拯救一下
+for(i in stat.weather.wdh.completeCheck[count<=10]$date){
+  data.weather.wdh.modify[date==i]<-approxData(data = data.weather.wdh.modify[date==i],colRange = 3:5)
+}
+
 
 ####数据完整度统计####
-stat.weather.source<-data.weather.zyp.final %>% 
+stat.weather.source<-data.weather.zyp.modify %>% 
                        cbind(date=format(.$datetime,format="%Y-%m-%d"),
                             hour=format(.$datetime,format="%H")) %>% 
                        .[,.(fullCount=length(datetime[!is.na(curRad)]),
@@ -327,7 +364,7 @@ stat.weather.source<-data.weather.zyp.final %>%
                             month=unique(format(datetime,format="%Y-%m")),
                             source="ZYP"),by=date]%>% 
                        rbind(.,
-                             data.weather.station.final%>% 
+                             data.weather.station.modify%>% 
                                cbind(date=format(.$datetime,format="%Y-%m-%d"),
                                      hour=format(.$datetime,format="%H")) %>% 
                                .[,.(fullCount=length(datetime[!is.na(curRad)]),
@@ -335,7 +372,7 @@ stat.weather.source<-data.weather.zyp.final %>%
                                     month=unique(format(datetime,format="%Y-%m")),
                                     source="STATION"
                                     ),by=date]) %>%
-                        rbind(.,data.weather.wdh.final %>% 
+                        rbind(.,data.weather.wdh.modify %>% 
                                 cbind(date=format(.$datetime,format="%Y-%m-%d"),
                                       hour=format(.$datetime,format="%H"))%>%
                                 .[,.(fullCount=length(datetime[!is.na(curRad)]),
@@ -365,7 +402,7 @@ stat.weather.checkComplete[is.na(isCompleteWorkHour)]$isCompleteWorkHour<-FALSE
 stat.weather.checkComplete[is.na(isCompleteFullHour)]$isCompleteFullHour<-FALSE
 stat.weather.checkComplete[is.na(source)]$source<-"NULL"
 
-write.xlsx(x=stat.weather.checkComplete,file = "Weather_checkComplete.xlsx")
+write.xlsx(x=stat.weather.checkComplete,file = "Weather_modify_checkComplete.xlsx")
 ggplot(data = stat.weather.checkComplete,
        aes(x=date,y=workHourCount#,color=source,shape=source,group=source
            ))+geom_point()+geom_line() #+theme(axis.text.x = element_text(angle = 90, hjust = 1))
