@@ -8,7 +8,7 @@ ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0& naCount<10],aes(x=na
 data.hznu.teaching.thermo.day.final.modify<-data.hznu.teaching.thermo.day.final[naCount<5]
 tmp.na.cov<-t(data.hznu.teaching.thermo.day.final.modify[,4:18])
 tmp.na.cov[is.nan(tmp.na.cov)]<-NA
-tmp.na.modi<-data.table(t(na.approx(tmp.na.cov)))
+tmp.na.modi<-data.table(t(na.approx(tmp.na.cov,na.rm = FALSE)))#看文档啊！参数不能漏啊！
 nrow(tmp.na.modi[!complete.cases(tmp.na.modi)])
 names(tmp.na.modi)<-sprintf("modH%02d",8:22)
 data.hznu.teaching.thermo.day.final.modify<-cbind(data.hznu.teaching.thermo.day.final.modify,tmp.na.modi)
@@ -65,7 +65,7 @@ ggplot(data=nn,aes(x=variable,y=value))+geom_point()
 # 合并至列表
 list.hznu.teaching.thermo<-split(data.hznu.teaching.thermo.day.final.modify,
                                  f=as.factor(data.hznu.teaching.thermo.day.final.modify$labelSeasonState))
-#####开始聚类分析
+####开始试聚类分析####
 stat.hznu.thermo.season<-data.hznu.teaching.thermo.day.final.modify[,.(
   count=length(labelRoomDay),
   finalState=finalState[1],

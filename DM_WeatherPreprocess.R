@@ -80,7 +80,23 @@ data.weather.station.final<-data.weather.station.raw.merge[,.(datetime=datetime[
                                                               sunTime=max(sunTime,na.rm = TRUE)
                                                               ),by=labelHour]
 data.weather.station.final$labelHour<-NULL
-#ZJU气象站最终：data.weather.station.final
+#ZJU气象站原始最终：data.weather.station.final
+
+####气象站数据插值####
+data.weather.station.modify<-data.table(date=as.Date(unique(substr(data.weather.station.final$datetime,1,10)))) %>% 
+                              .[,.(datetime=date+dhours(0:23)),by=date] %>%
+                              merge(x=,y=data.weather.station.final,all.x=TRUE,by.x = "datetime",by.y="datetime")%>%
+                              as.data.table(.)
+data.weather.station.modify$isMod<-FALSE
+data.weather.station.modify[!complete.cases(data.weather.station.modify)]$isMod<-TRUE
+stat.weather.station.completeCheck<-data.weather.station.modify[isMod==TRUE,.(count=sum(isMod)),by=date]#有些24小时里缺失10来个的真的拯救不了了...
+for(i in stat.weather.station.completeCheck[count<=10]$date){
+  data.weather.station.modify[date==i]
+}
+nn<-data.weather.station.modify[date=="2016-11-18"]
+for(j in 3:11){
+  nn[,..j]<-na.approx(nn[,..j],na.rm = FALSE)
+}
 
 ####处理萧山机场气象数据集####
 #从MySQL导入
