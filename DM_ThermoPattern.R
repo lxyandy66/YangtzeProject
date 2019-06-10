@@ -164,14 +164,14 @@ for(i in names(list.hznu.teaching.thermo)){
   tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[i]][,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
                          id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
   tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
-  range<-range(tmp.plot.heatMap$value)
+  range<-boxplot.stats(tmp.plot.heatMap$value)
   for(j in unique(tmp.plot.heatMap$thermoPattern))
   {
     ggsave(file=paste(i,j,"heatMap.png",sep = "_"),
           plot=ggplot(data=tmp.plot.heatMap[thermoPattern==j],
                       aes(x=hour,y=labelRoomDay,fill=value,group=thermoPattern))+
-               geom_raster(interpolate = TRUE)+
-               scale_fill_gradient(limits = c(range[1],range[2]),low = "green",high = "red")+
+               geom_raster(interpolate = FALSE)+
+               scale_fill_gradient(limits = c(range$stats[1],range$stats[5]),low = "green",high = "red")+
                facet_wrap(~ thermoPattern, nrow = 2)+theme_classic()+
                theme(axis.title.y=element_blank(),axis.text.y=element_blank(), axis.ticks.y=element_blank()),
           width=4,height = 3,dpi = 80  
