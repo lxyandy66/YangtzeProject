@@ -287,7 +287,7 @@ getWaterVp<-function(x){
 
 ####将时间间隔四舍五入至标准间隔####
 fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
-  return(as.POSIXct(round(as.numeric(x)/invl)*invl,origin=originTime))
+  return(as.POSIXct(round(as.numeric(x)/invl)*iclassssssnvl,origin=originTime))
 }
 
 
@@ -295,3 +295,13 @@ fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
 rangeRatio<-function(x){
   return(1-(min(x)/max(x)))
 }
+
+####对数据框的逐列插补####
+approxData<-function(data,colRange){
+  for(i in colRange){
+    data[,i]<-na.approx(data[,..i],na.rm = FALSE)
+  }
+  return(data)
+}
+
+
