@@ -12,6 +12,7 @@ data.hznu.teaching.decoupling<-merge(
 data.hznu.teaching.decoupling<-
   data.hznu.teaching.decoupling[complete.cases(data.hznu.teaching.decoupling[,c("clusterName","thermoPattern")])]
 
+ggplot(data=data.hznu.teaching.decoupling,aes(x=acCount))+geom_density()
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
 

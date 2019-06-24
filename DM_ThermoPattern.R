@@ -8,7 +8,7 @@ ggplot(data=data.hznu.teaching.thermo.day.final[naCount!=0& naCount<10],aes(x=na
 data.hznu.teaching.thermo.day.final.modify<-data.hznu.teaching.thermo.day.final[naCount<5]
 tmp.na.cov<-t(data.hznu.teaching.thermo.day.final.modify[,4:18])
 tmp.na.cov[is.nan(tmp.na.cov)]<-NA
-tmp.na.modi<-data.table(t(na.approx(tmp.na.cov)))
+tmp.na.modi<-data.table(t(na.approx(tmp.na.cov,na.rm = FALSE)))#看文档啊！参数不能漏啊！
 nrow(tmp.na.modi[!complete.cases(tmp.na.modi)])
 names(tmp.na.modi)<-sprintf("modH%02d",8:22)
 data.hznu.teaching.thermo.day.final.modify<-cbind(data.hznu.teaching.thermo.day.final.modify,tmp.na.modi)
@@ -65,7 +65,7 @@ ggplot(data=nn,aes(x=variable,y=value))+geom_point()
 # 合并至列表
 list.hznu.teaching.thermo<-split(data.hznu.teaching.thermo.day.final.modify,
                                  f=as.factor(data.hznu.teaching.thermo.day.final.modify$labelSeasonState))
-#####开始聚类分析
+####开始试聚类分析####
 stat.hznu.thermo.season<-data.hznu.teaching.thermo.day.final.modify[,.(
   count=length(labelRoomDay),
   finalState=finalState[1],
@@ -164,14 +164,14 @@ for(i in names(list.hznu.teaching.thermo)){
   tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[i]][,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
                          id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
   tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
-  range<-range(tmp.plot.heatMap$value)
+  range<-boxplot.stats(tmp.plot.heatMap$value)
   for(j in unique(tmp.plot.heatMap$thermoPattern))
   {
     ggsave(file=paste(i,j,"heatMap.png",sep = "_"),
           plot=ggplot(data=tmp.plot.heatMap[thermoPattern==j],
                       aes(x=hour,y=labelRoomDay,fill=value,group=thermoPattern))+
-               geom_raster(interpolate = TRUE)+
-               scale_fill_gradient(limits = c(range[1],range[2]),low = "green",high = "red")+
+               geom_raster(interpolate = FALSE)+
+               scale_fill_gradient(limits = c(range$stats[1],range$stats[5]),low = "green",high = "red")+
                facet_wrap(~ thermoPattern, nrow = 2)+theme_classic()+
                theme(axis.title.y=element_blank(),axis.text.y=element_blank(), axis.ticks.y=element_blank()),
           width=4,height = 3,dpi = 80  
