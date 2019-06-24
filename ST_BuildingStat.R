@@ -21,4 +21,5 @@ data.hznu.teaching.energy<-data.hznu.energy.room.day[buildingCode %in%
 
 
 ####简单统计####
-#待需要时
+#房间空调数统计
+stat.hznu.roomAc<-data.all[!is.na(ac_code),.(acCount=length(unique(ac_code))),by=(roomCode=substr(ac_code,1,grep("m",ac_code)))]
