@@ -22,4 +22,10 @@ data.hznu.teaching.energy<-data.hznu.energy.room.day[buildingCode %in%
 
 ####简单统计####
 #房间空调数统计
-stat.hznu.roomAc<-data.all[!is.na(ac_code),.(acCount=length(unique(ac_code))),by=(roomCode=substr(ac_code,1,grep("m",ac_code)))]
+# stat.hznu.roomAc<-data.all[!is.na(ac_code),.(acCount=length(unique(ac_code))),by=(roomCode=substr(ac_code,1,grep("m",ac_code)))]
+
+data.all$roomCode<-apply(data.all[,"ac_code"],MARGIN=1,FUN=getSplitMember,splitSimbol="m")
+
+data.all<-data.all[!is.na(ac_code)]
+data.all$roomCode<-as.character(strsplit(data.all$ac_code,split = "m")[[1]][1])
+stat.hznu.roomAc<-data.all[!is.na(ac_code),.(acCount=length(unique(ac_code))),by=roomCode]
