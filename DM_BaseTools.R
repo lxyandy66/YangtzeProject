@@ -304,4 +304,8 @@ approxData<-function(data,colRange){
   return(data)
 }
 
-
+####归一化处理####
+normalize<-function(data,upper=1,lower=0,intercept=0){
+  range<-range(data,na.rm = TRUE)
+  return(intercept+abs(upper-lower)*(data-range[1])/(range[2]-range[1]))
+}
