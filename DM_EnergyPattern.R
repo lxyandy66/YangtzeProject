@@ -119,15 +119,25 @@ tmp.mean<-data.table(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22),"acC
 tmp.mean[,c(sprintf("euiH%d",8:22))]<-tmp.mean[,c(sprintf("h%d",8:22))]/tmp.mean$acCount
 data.hznu.teaching.energy.final<-cbind(data.hznu.teaching.energy.final,tmp.mean[,c(sprintf("euiH%d",8:22))])
 
+#不加all前缀说明仅考虑使用时
 data.hznu.teaching.energy.final$sumUiElec<-
   data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$acCount
-data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
-                                              MARGIN = 1,FUN = function(x){ sd(x>0.2,na.rm = TRUE)})#sapply为啥不对
-data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
-                                              MARGIN = 1,FUN = sd,na.rm=TRUE)#sapply为啥不对
-data.hznu.teaching.energy.final$meanElec<-
+data.hznu.teaching.energy.final$sdElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+                                              MARGIN = 1,FUN = function(x){ sd(x[x>0.2],na.rm = TRUE)})
+data.hznu.teaching.energy.final$sdAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("h%d",8:22))],
+                                              MARGIN = 1,FUN = sd,na.rm=TRUE)
+data.hznu.teaching.energy.final$sdUiElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
+                                              MARGIN = 1,FUN = function(x){ sd(x[x>0.2],na.rm = TRUE)})#sapply为啥不对
+data.hznu.teaching.energy.final$sdUiAllElec<-apply(data.hznu.teaching.energy.final[,c(sprintf("euiH%d",8:22))],
+                                                 MARGIN = 1,FUN = sd,na.rm=TRUE)#sapply为啥不对
+#乱改变量含义干嘛！？！？！meanElec变成台均时均能耗了
+data.hznu.teaching.energy.final$meanUiElec<-
   data.hznu.teaching.energy.final$sumUiElec/data.hznu.teaching.energy.final$runtime
-data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$meanElec/data.hznu.teaching.energy.final$acCount
+
+#增加统计变量：房间空调使用时间电耗均值
+data.hznu.teaching.energy.final$meanUseRoomElec<-data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$runtime
+data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$sumElec/(data.hznu.teaching.energy.final$runtime*data.hznu.teaching.energy.final$acCount)
+data.hznu.teaching.energy.final$meanAllElec<-data.hznu.teaching.energy.final$sumElec/15
 
 #对于单台空调能耗设上限
 ecLim<-mean(data.hznu.teaching.energy.final$meanAcElec,na.rm = TRUE)+
@@ -144,31 +154,27 @@ data.hznu.teaching.energy.std<-data.hznu.teaching.energy.final[sumElec<=150&mean
 
 temp.std<-data.table(scale(data.hznu.teaching.energy.std[,c(sprintf("euiH%d",8:22))],center = FALSE))
 names(temp.std)<-sprintf("stdH%d",8:22)
-temp.std$stdSumEuiElec<-scale(data.hznu.teaching.energy.std$sumUiElec,center = FALSE)
-temp.std$stdSumElec<-scale(data.hznu.teaching.energy.std$sumElec,center = FALSE)
-temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)
-temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)
-temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)
-temp.std$stdMeanAcElec<-scale(data.hznu.teaching.energy.std$meanAcElec,center = FALSE)
-temp.std$stdSdElec<-scale(data.hznu.teaching.energy.std$sdElec,center = FALSE)
-temp.std$stdSdAllElec<-scale(data.hznu.teaching.energy.std$sdAllElec,center = FALSE)
+temp.std$stdSumEuiElec<-scale(data.hznu.teaching.energy.std$sumUiElec,center = FALSE)#日内房间使用时刻台均总能耗
+temp.std$stdSumElec<-scale(data.hznu.teaching.energy.std$sumElec,center = FALSE)#日内房间使用时刻房间总能耗
+temp.std$stdRuntime<-scale(data.hznu.teaching.energy.std$runtime,center = FALSE)#使用时长
+temp.std$stdAcCount<-scale(data.hznu.teaching.energy.std$acCount,center = FALSE)#空调数
+#temp.std$stdMeanElec<-scale(data.hznu.teaching.energy.std$meanElec,center = FALSE)#这个变量改名了
+temp.std$stdMeanAcElec<-scale(data.hznu.teaching.energy.std$meanAcElec,center = FALSE)#日内房间所有时刻台均时均能耗
+temp.std$stdSdElec<-scale(data.hznu.teaching.energy.std$sdElec,center = FALSE)#使用时房间逐时能耗标准差
+temp.std$stdSdAllElec<-scale(data.hznu.teaching.energy.std$sdAllElec,center = FALSE)#日内房间所有时刻能耗标准差
+temp.std$stdMeanUseRoomElec<-scale(data.hznu.teaching.energy.std$meanUseRoomElec,center = FALSE)#使用时能耗时均值
 data.hznu.teaching.energy.std<-cbind(data.hznu.teaching.energy.std,temp.std)
 
 ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,color=clusterName))+geom_density()
-
 nn<-boxplot(data =data.hznu.teaching.energy.std,runtime~clusterName,outline = FALSE)
-
 boxplot.stats(x=data.hznu.teaching.energy.std,runtime~clusterName)
-
-
-
 cor(data.hznu.energy.tryCluster[,c("stdSumElec","stdSdAllElec","stdRuntime")])
 
 # data.hznu.energy.tryCluster<-data.hznu.teaching.energy.final[finalState=="cooling"&sumElec<=150,c("sdElec","meanElec","sumElec","runtime")]
 #,"meanElec","sumElec","runtime")]
 
 ####聚类对象选择####
-modeSelect<-"heating"
+modeSelect<-"cooling"
 usePAM<-TRUE
 clusterAttr<-c("stdSumElec","stdSdAllElec","stdRuntime")
 data.hznu.energy.tryCluster<-data.hznu.teaching.energy.std[finalState==modeSelect]
@@ -179,14 +185,14 @@ wssClusterEvaluate(data = data.hznu.energy.tryCluster[,..clusterAttr],
                    maxIter = 1000,maxK = 10)
 pamkClusterEvaluate(
   data = data.hznu.energy.tryCluster[,..clusterAttr],
-  criter = "ch",startK = 2,endK = 10)
+  criter = "asw",startK = 2,endK = 10)
 multiplyClusterEvaluate(data = data.hznu.energy.tryCluster)
 # stat.energy.bestK<-NbClust(data=data.hznu.teaching.energy.final[,c("sdElec","meanElec","sumElec","runtime")],
 #                            min.nc = 2,max.nc = 4,method = "kmeans")#内存不够
 #3或4类
 ####分类法一####
 #直接按照总体特征进行分类
-for(i in 3:7){
+for(i in 2){
 energy.pamk<-pamk(data = data.hznu.energy.tryCluster[,..clusterAttr],
                   krange = i,criterion = "ch",critout = TRUE,usepam = usePAM)
 # energy.pamk
@@ -199,9 +205,11 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
   runtime=mean(runtime,na.rm = TRUE),
   sumUiElec=mean(sumUiElec,na.rm = TRUE),
   sumElec=mean(sumElec,na.rm = TRUE),
-  sdElec=sd(sumElec,na.rm = TRUE),
-  meanElec=mean(meanElec,na.rm = TRUE),
-  meanAcElec=mean(meanAcElec,na.rm = TRUE),
+  sdSumElec=sd(sumElec,na.rm = TRUE),
+  meanAcCount=mean(acCount,na.rm = TRUE),
+  meanSd=mean(sdAllElec,na.rm = TRUE),
+  meanElec=mean(meanElec,na.rm = TRUE),#台均
+  meanUseRoomElec=mean(meanUseRoomElec,na.rm = TRUE),#室内空调使用时均
   onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
   forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
   afternoonUsage=length(labelRoomDay[clusterName=="Afternoon"]),
@@ -214,11 +222,11 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.energy.tryCluster[,.(
 #                                                      energyCluster=data.hznu.energy.tryCluster$energyCluster,
 #                                                      acMode=data.hznu.energy.tryCluster$finalState),mat=TRUE)
 write.xlsx(x=stat.hznu.energy.tryCluster.descr,
-           file=paste(i,modeSelect,"3var_sumElec",ifelse(usePAM,"PAM","noPAM"),"descr","EnergyPattern.xlsx",sep = "_"))
+           file=paste(i,modeSelect,"3var_sumElec_sdAll_runtime",ifelse(usePAM,"PAM","noPAM"),"descr","EnergyPattern.xlsx",sep = "_"))
 # write.xlsx(x=stat.hznu.energy.tryCluster,file=paste(i,modeSelect,"3var",ifelse(usePAM,"PAM","noPAM"),"EnergyPattern.xlsx",sep = "_"))
-ggsave(file=paste(i,modeSelect,"3var_sumElec",ifelse(usePAM,"PAM","noPAM"),"EnergyPattern_dist.png",sep = "_"),
+ggsave(file=paste(i,modeSelect,"3var_sumElec_sdAll_runtime",ifelse(usePAM,"PAM","noPAM"),"EnergyPattern_dist.png",sep = "_"),
        plot = ggplot(data=stat.hznu.energy.tryCluster.descr,
-                     aes(x=runtime,y=sumElec,size=sdElec,color=meanElec))+geom_point(),
+                     aes(x=runtime,y=sumElec,size=meanSd,color=meanUseRoomElec))+geom_point(),
        width=8,height = 6,dpi = 100
        )
 }
@@ -232,7 +240,7 @@ data.hznu.teaching.energy.std$energyClusterName<-""
 for(i in unique(data.hznu.teaching.energy.std$finalState)){
   data.hznu.teaching.energy.std[finalState==i]$energyCluster<-pamk(
     data.hznu.teaching.energy.std[finalState==i,..clusterAttr],
-    krange = ifelse(i=="heating",3,4),
+    krange = nrow(info.energy.clusterName[finalState==i]),
     criterion = "ch",
     usepam = TRUE,
     critout = TRUE

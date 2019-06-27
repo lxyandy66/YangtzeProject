@@ -40,7 +40,7 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
   data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
   
   #CART决策树算法
-  tree.both<-rpart(energyClusterName~clusterName+areaScale+modiSeason+runtimeClass,cp=0.0055,
+  tree.both<-rpart(energyClusterName~clusterName+areaScale+modiSeason,cp=0.001,
                    data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
   rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
   plot(rpartTrue2)
@@ -82,13 +82,13 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
   confusionMatrix(table(rtree.training,data.hznu.teaching.decoupling.training$energyClusterName))
   capture.output(c(confusionMatrix(table(rtree.training,data.hznu.teaching.decoupling.training$energyClusterName)),
                    asRules(tree.both)),
-                 file =paste("HZNU_行为_制热_训练集_决策树评估.txt"))
+                 file =paste("HZNU_行为_制冷_训练集_决策树评估.txt"))
   ####以测试集验证####
   rtree.predict<-predict(rpartTrue2,data.hznu.teaching.decoupling.test)
   confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName))
   capture.output(c(confusionMatrix(table(rtree.predict,data.hznu.teaching.decoupling.test$energyClusterName)),
                    asRules(tree.both)),
-                 file =paste("HZNU_行为_制热_预测集_决策树评估.txt"))
+                 file =paste("HZNU_行为_Kheating=5_制热_预测集_决策树评估.txt"))
   rm(rpartTrue2)
   
 # }
