@@ -22,7 +22,7 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
 # for(i in unique(data.hznu.teaching.decoupling[finalState=="cooling"]$clusterName)){
 
   #分块处理
-  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="heating"]
+  data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState=="cooling"]
   ggplot(data=data.hznu.teaching.decoupling.selected,aes(x=runtime,color=clusterName))+geom_density()
   data.hznu.teaching.decoupling.selected$energyClusterName<-as.factor(data.hznu.teaching.decoupling.selected$energyClusterName)
   data.hznu.teaching.decoupling.selected$thermoPattern<-as.factor(data.hznu.teaching.decoupling.selected$thermoPattern)
@@ -56,14 +56,14 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
   rpartTrue2<-tree.both
   
   # #随机森林
-  fit.forest<-randomForest(energyClusterName~clusterName+areaScale+modiSeason+runtime,
+  fit.forest<-randomForest(energyClusterName~clusterName+areaScale+modiSeason+runtimeClass,
                            data=data.hznu.teaching.decoupling.training,ntree=1000)
   rpartTrue2<-fit.forest
   
   ####AdaBoost####
   #这里有问题
-  tree.both<-boosting(energyClusterName~clusterName+areaScale+modiSeason+runtime,
-                      data=data.hznu.teaching.decoupling.training,mfinal = 500)
+  tree.both<-boosting(energyClusterName~clusterName+areaScale+modiSeason+runtimeClass,
+                      data=data.hznu.teaching.decoupling.training,mfinal = 200)
   rpartTrue2<-tree.both
   #检查误差演变
   b<-errorevol(rpartTrue2,data.hznu.teaching.decoupling.training)
