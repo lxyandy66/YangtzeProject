@@ -99,6 +99,24 @@ list.hznu.room.use[["NA_Transition"]]<-NULL#过渡季缺失不能用
 
 ##可接"HZNU_含追加_房间级_行为预处理完成.rdata"
 
+####仅教学行为部分全年统计####
+# 该部分后加，400条数据未在行为聚类中处理，且未保存
+# 修正缺失的finalState
+data.hznu.teaching.use[is.na(finalState)&modiSeason %in% c("Winter","Winter_warm")]$finalState<-"heating"#就这400条有缺失
+data.hznu.teaching.use$period<-sapply(as.numeric(substr(data.hznu.teaching.use$date,9,10)),getMonthPeriod)#或者处理在fun中，自定义一个fun再用apply，这里都可以
+stat.hznu.use.annualUsage<-data.hznu.teaching.use[,.(
+  month=unique(month),
+  sum = length(labelRoomDay),
+  season=unique(modiSeason),
+  useCount = length(labelRoomDay[runtime > 0]),
+  noneUseCount = length(labelRoomDay[runtime == 0]),
+  heatingCount = length(labelRoomDay[finalState == "heating"]),
+  coolingCount = length(labelRoomDay[finalState == "cooling"])
+),by=(monthPeriod<-paste(month,period,sep = "_"))]
+write.xlsx(x=stat.hznu.use.annualUsage,file = "HZNU_含追加_仅教学_房间级_行为_逐月使用及空调工况统计.xlsx")
+
+
+
 ####行为再聚类####
 ####试聚类####
 #聚类评估

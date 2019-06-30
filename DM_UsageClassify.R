@@ -3,6 +3,9 @@
 #接list.hznu.room.use
 #已统一全年行为模式名称
 
+#本脚本仅考虑行为部分，即记录-行为关系
+#对行为数据处理至房间级，并进行行为模式聚类
+
 data.hznu.use.final<-as.data.table(list.hznu.room.use[[1]])
 for(i in c(2:6)){
   data.hznu.use.final<-rbind(data.hznu.use.final,list.hznu.room.use[[i]])

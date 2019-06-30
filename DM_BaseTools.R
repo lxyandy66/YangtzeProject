@@ -69,17 +69,17 @@ getSeason<-function(month){
 
 
 
-getMonthPeriod<-function(month){
+getMonthPeriod<-function(day){
   #»ñÈ¡ÔÂÑ®
-  if(month%in% c(1:10))
+  if(day%in% c(1:10))
     return("1st")
   else
-    if(month %in% c(11:20))
+    if(day %in% c(11:20))
       return("2nd")
   else
-    if(month %in% c(21:31))
+    if(day %in% c(21:31))
       return("3rd")
-  warning(paste(month," general exception, NA is returned",sep = ""),immediate. = TRUE)
+  warning(paste(day," general exception, NA is returned",sep = ""),immediate. = TRUE)
   return(NA)
 }
 
