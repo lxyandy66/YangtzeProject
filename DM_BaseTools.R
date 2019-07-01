@@ -41,6 +41,10 @@ getMode <- function(x) {
 getSeason<-function(month){
   #由月份获取季节
   #异常部分
+  if(is.na(month)){
+    warning("NA input, NA is returned",immediate. = TRUE)
+    return(NA)
+  }
   if(month<1|month>12){
     if(!is.numeric(month)){
       warning(paste(month," not a numeric, NA is returned",sep = ""),immediate. = TRUE)

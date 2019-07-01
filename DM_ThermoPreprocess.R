@@ -7,11 +7,19 @@ data.hznu.thermo.raw<-data.hznu.predict[,c("ac_code","time","total_elec","real_t
 info.hznu.building<-as.data.table(read.csv(file = "HZNU_建筑功能及编码对应.csv"))
 data.hznu.teaching.thermo.raw<-
   data.hznu.thermo.raw[substr(roomCode,1,10) %in% info.hznu.building[type=="teaching"]$buildingCode]
+
+
+data.hznu.teaching.thermo.raw<-data.hznu.teaching.thermo.raw[!is.na(real_temp)]
+data.hznu.teaching.thermo.raw$date<-substr(data.hznu.teaching.thermo.raw$time,1,10)
+data.hznu.teaching.thermo.raw$labelAcDay<-paste(data.hznu.teaching.thermo.raw$ac_code,
+                                                data.hznu.teaching.thermo.raw$date,sep = "_")
+
+
 #筛选有空调使用的记录
 data.hznu.teaching.thermo.raw$labelRoomDay<-paste(data.hznu.teaching.thermo.raw$roomCode,
                                                   data.hznu.teaching.thermo.raw$date,sep = "_")
-data.hznu.teaching.thermo.raw<-
-  data.hznu.teaching.thermo.raw[labelRoomDay %in% data.hznu.use.final$labelRoomDay]
+# data.hznu.teaching.thermo.raw<-
+#   data.hznu.teaching.thermo.raw[labelRoomDay %in% data.hznu.use.final$labelRoomDay]#这个应该放在最后
 data.hznu.teaching.thermo.raw<-
   data.hznu.teaching.thermo.raw[!duplicated(data.hznu.teaching.thermo.raw)]
 
@@ -22,22 +30,20 @@ data.hznu.teaching.thermo.raw<-
 #3、根据末端级数据所得全天序列，检查异常点，插值补齐异常点
 #4、将末端整合至房间级
 
-####去掉全天没有波动的数据####
-data.hznu.teaching.thermo.raw<-data.hznu.teaching.thermo.raw[!is.na(real_temp)]
-data.hznu.teaching.thermo.raw$date<-substr(data.hznu.teaching.thermo.raw$time,1,10)
-data.hznu.teaching.thermo.raw$labelAcDay<-paste(data.hznu.teaching.thermo.raw$ac_code,
-                                                data.hznu.teaching.thermo.raw$date,sep = "_")
+
 
 ####删去全局离群点####
 data.hznu.teaching.thermo.raw$modiTemp<-data.hznu.teaching.thermo.raw$real_temp
 data.hznu.teaching.thermo.raw[modiTemp>40|modiTemp< 5]<-NA
 
 ####删去单个不符合季节特征的数据点####
-ggplot(data=data.hznu.teaching.thermo.raw[season %in% c("Winter","Winter_warm","Spring","Autumn")],aes(x=modiTemp))+geom_density()+xlim(0,10)
+data.hznu.teaching.thermo.raw$month<-as.numeric(substr(data.hznu.teaching.thermo.raw$date,6,7))
 data.hznu.teaching.thermo.raw$season<- 
-  sapply(as.numeric(substr(data.hznu.teaching.thermo.raw$date,6,7)), getSeason)
+  apply(data.hznu.teaching.thermo.raw[,"month"], MARGIN = 1,FUN = getSeason)
 data.hznu.teaching.thermo.raw[(season %in% c("Winter","Winter_warm","Spring","Autumn") &(modiTemp>33))|
                                 (season %in% c("Summer","Summer_warm") &(modiTemp<17.5|modiTemp>35)) ]$modiTemp<-NA
+ggplot(data=data.hznu.teaching.thermo.raw[season %in% c("Winter","Winter_warm","Spring","Autumn")],aes(x=modiTemp))+geom_density()+xlim(0,10)
+
 
 stat.hznu.thermo.stableCheck<-data.hznu.teaching.thermo.raw[,.(ac_code=ac_code[1],
                                                                count=length(time),
