@@ -39,6 +39,10 @@ data.hznu.teaching.thermo.day.final.modify$lowRatioValue<-
 data.hznu.teaching.thermo.day.final.modify$lowRatio<-NULL#为啥...
 ggplot(data = data.hznu.teaching.thermo.day.final.modify,aes(x=lowRatioValue))+geom_density()
 
+####简单的统计及分析####
+data.hznu.teaching.thermo.cleaned$on_off<-as.factor(data.hznu.teaching.thermo.cleaned$on_off)
+ggplot(data=data.hznu.teaching.thermo.cleaned,aes(x=modiTemp,color=season,fill=on_off,linetype=on_off))+geom_density(alpha=0.3)+facet_wrap()
+
 ####按季节进行归一化####
 tmp.scale<-data.hznu.teaching.thermo.day.final.modify[,c(sprintf("modH%02d",8:22),"labelSeasonState",
                                                          "sd","meanTemp","range","lowRatioValue")]
