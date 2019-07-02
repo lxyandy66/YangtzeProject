@@ -34,7 +34,7 @@ data.hznu.teaching.thermo.raw<-
 
 ####删去全局离群点####
 data.hznu.teaching.thermo.raw$modiTemp<-data.hznu.teaching.thermo.raw$real_temp
-data.hznu.teaching.thermo.raw[modiTemp>40|modiTemp< 5]<-NA
+data.hznu.teaching.thermo.raw[modiTemp>40|modiTemp< 5]$modiTemp<-NA
 
 ####删去单个不符合季节特征的数据点####
 data.hznu.teaching.thermo.raw$month<-as.numeric(substr(data.hznu.teaching.thermo.raw$date,6,7))
@@ -59,7 +59,7 @@ stat.hznu.thermo.stableCheck<-data.hznu.teaching.thermo.raw[,.(ac_code=ac_code[1
 stat.hznu.thermo.stableCheck$range<-stat.hznu.thermo.stableCheck$maxTemp-stat.hznu.thermo.stableCheck$minTemp
 stat.hznu.thermo.stableCheck$labelRoomDay<-paste(substr(stat.hznu.thermo.stableCheck$ac_code,1,13),stat.hznu.thermo.stableCheck$date,sep = "_")
 
-ggplot(data=data.hznu.teaching.thermo.raw[labelAcDay=="330100D258203m03_2017-10-20"]
+ggplot(data=data.hznu.teaching.thermo.raw[labelAcDay=="330100D255202m01_2017-11-09"]
        ,aes(x=hour,y=real_temp))+geom_point()
 length(stat.hznu.thermo.stableCheck[sd==0]$labelAcDay)
 #[1] 1363
@@ -110,18 +110,44 @@ data.hznu.teaching.thermo.day.long<-
   data.hznu.teaching.thermo.cleaned[,.(
     time=time[1],
     roomCode=roomCode[1],
+    season=season[1],
+    state=getMode(state[state!="off"]),
     labelRoomDay=labelRoomDay[1],
+    total_elec=sum(total_elec,na.rm = TRUE),
+    modifyElec=sum(modifyElec,na.rm = TRUE),
     hour=hour[1],
+    on_off=ifelse(sum(on_off,na.rm = TRUE)>0,1,0),
     real_temp=mean(real_temp,na.rm = TRUE),
     set_temp=mean(set_temp[on_off==1],na.rm = TRUE),
     modiTemp=mean(modiTemp[ifelse(
-      labelRoomDay %in% stat.hznu.thermo.needProcess,
+      labelRoomDay %in% stat.hznu.thermo.needProcess$labelRoomDay,
       ac_code %in% outlierModify(data.hznu.teaching.thermo.cleaned[labelRoomDay==labelRoomDay[1]]$modiTemp,
                                  data.hznu.teaching.thermo.cleaned[labelRoomDay==labelRoomDay[1]]$ac_code),
       TRUE)],na.rm = TRUE)
   ),by=labelRoomDayHour]
 data.hznu.teaching.thermo.day.long$date<-apply(data.hznu.teaching.thermo.day.long[,"labelRoomDay"],
                                                MARGIN = 1,FUN = getSplitMember,splitSimbol = "_",isLastOne = TRUE)
+
+####对清洗了能耗及热环境的长数据进行输出####
+data.hznu.teaching.thermo.day.long[modifyElec==0]$state<-"off"
+data.hznu.teaching.thermo.day.long$modiSeason<-data.hznu.teaching.thermo.day.long$season
+data.hznu.teaching.thermo.day.long[modiSeason %in% c("Autumn","Spring")]$modiSeason<-"Transition"
+
+data.hznu.teaching.thermo.day.long$month<-as.numeric(substr(data.hznu.teaching.thermo.day.long$time,6,7))
+
+data.hznu.teaching.thermo.day.long$finalState<-data.hznu.teaching.thermo.day.long$state
+data.hznu.teaching.thermo.day.long[finalState %in% c("dehum","dehumi")]$finalState<-"cooling"
+data.hznu.teaching.thermo.day.long[(month %in% c(6:9))& !is.na(finalState) & finalState!="off"]$finalState<-"cooling"
+data.hznu.teaching.thermo.day.long[(month %in% c(12, 1, 2, 3))& !is.na(finalState) & finalState!="off"]$finalState <- "heating"
+
+data.hznu.teaching.all<-
+       data.hznu.teaching.thermo.day.long[,c("time","date","season","modiSeason","roomCode","on_off","state","finalState","total_elec","modifyElec","set_temp","real_temp","modiTemp")]
+save(data.hznu.teaching.all,file = "HZNU_含追加_仅教学_能耗热环境已清洗_长数据.rdata")
+data.hznu.teaching.all$on_off<-as.factor(data.hznu.teaching.all$on_off)
+ggplot(data=data.hznu.teaching.all[finalState%in% c("cooling","heating","off")],aes(x=modiTemp,color=modiSeason,fill=on_off,linetype=on_off))+geom_density(alpha=0.3)#+facet_wrap(~finalState)
+
+
+####整理为宽数据####
 data.hznu.teaching.thermo.day.final<-dcast(
   data.hznu.teaching.thermo.day.long[hour %in% sprintf("%02d",8:22),c("labelRoomDay","date","roomCode","modiTemp","hour")],
   labelRoomDay+date+roomCode~hour,value.var = "modiTemp")
