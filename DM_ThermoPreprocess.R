@@ -146,6 +146,9 @@ save(data.hznu.teaching.all,file = "HZNU_含追加_仅教学_能耗热环境已清洗_长数据.r
 data.hznu.teaching.all$on_off<-as.factor(data.hznu.teaching.all$on_off)
 ggplot(data=data.hznu.teaching.all[finalState%in% c("cooling","heating","off")],aes(x=modiTemp,color=modiSeason,fill=on_off,linetype=on_off))+geom_density(alpha=0.3)#+facet_wrap(~finalState)
 
+####输出labelRoomDay的日均设定温度####
+data.hznu.teaching.thermo.setTemp<-data.hznu.teaching.thermo.day.long[,.(date=date[1],
+                                                                         setTemp=mean(set_temp[on_off==1],na.rm = TRUE)),by=labelRoomDay]
 
 ####整理为宽数据####
 data.hznu.teaching.thermo.day.final<-dcast(
