@@ -234,7 +234,7 @@ ggsave(file=paste(i,modeSelect,"3var_sumElec_sdAll_runtime",ifelse(usePAM,"PAM",
 ggplot(data.hznu.energy.tryCluster,aes(x=stdSdAllElec,color=clusterName))+geom_density()#+xlim(0,4)
 
 ####ºØ∫œæ€¿‡####
-info.energy.clusterName<-as.data.table(read.xlsx(file = "HZNU_EnergyClusterMapping.xlsx",sheetIndex = 1))
+info.energy.clusterName<-as.data.table(read.xlsx(file = "HZNU_EnergyClusterMapping.xlsx",sheetName = "cooling=4"))
 data.hznu.teaching.energy.std$energyCluster<- -1
 data.hznu.teaching.energy.std$energyClusterName<-""
 for(i in unique(data.hznu.teaching.energy.std$finalState)){

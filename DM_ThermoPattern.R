@@ -186,6 +186,19 @@ data.hznu.teaching.thermo.final<-list.hznu.teaching.thermo[[1]]
 for(i in 2:length(list.hznu.teaching.thermo)){
   data.hznu.teaching.thermo.final<-rbind(data.hznu.teaching.thermo.final,list.hznu.teaching.thermo[[i]])
 }
+
+####修正一下热环境模式名称####
+# 之后可以不进行此操作
+# 将所有热环境模式归类为Low; High; Mid-Stable; Mid-Fluctuation; High
+# unique(data.hznu.teaching.thermo.final$thermoPattern)
+# [1] "high"     "low"      "mid"      "mid-s"    "mid-v"    "mid-low"  "mid-high"
+
+tmp.changeName<-data.table(originName=unique(data.hznu.teaching.thermo.final$thermoPattern),
+                              ModiName=c("High","Low","Mid-Stable","Mid-Stable","Mid-Fluctuation","Mid-Stable","Mid-Fluctuation"))
+data.hznu.teaching.thermo.final$originThermoPatternName<-data.hznu.teaching.thermo.final$thermoPattern
+data.hznu.teaching.thermo.final$thermoPattern<-apply(data.hznu.teaching.thermo.final[,"originThermoPatternName"],MARGIN = 1,
+                                                     FUN = function(x){return(tmp.changeName[originName==x]$ModiName)})
+
 save(data.hznu.teaching.thermo.final,
      list.hznu.teaching.thermo,file = "HZNU_含追加_房间级_教学_热环境聚类完成.rdata")
 

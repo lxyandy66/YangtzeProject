@@ -406,3 +406,15 @@ write.xlsx(x=stat.weather.checkComplete,file = "Weather_modify_checkComplete.xls
 ggplot(data = stat.weather.checkComplete,
        aes(x=date,y=workHourCount#,color=source,shape=source,group=source
            ))+geom_point()+geom_line() #+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+####基于气象站数据整理至每天气象####
+data.weather.airport.daily<-data.weather.airport.final[,.(meanOutTemp=mean(outTemp,na.rm = TRUE),
+                                                          maxOutTemp=max(outTemp,na.rm = TRUE),
+                                                          minOutTemp=min(outTemp,na.rm = TRUE),
+                                                          meanRhOut=mean(rhOut,na.rm = TRUE),
+                                                          meanWindSpeed=mean(windSpeed,na.rm = TRUE),
+                                                          weather=getMode(weather[!is.na(weather)])
+                                                          ),by=(date=substr(data.weather.airport.final$datetime,1,10))]
+
+
