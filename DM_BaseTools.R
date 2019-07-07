@@ -313,3 +313,15 @@ normalize<-function(data,upper=1,lower=0,intercept=0){
   range<-range(data,na.rm = TRUE)
   return(intercept+abs(upper-lower)*(data-range[1])/(range[2]-range[1]))
 }
+
+
+####分类器验证函数####
+predictTest<-function(testSet,resultValue,predictableModel,isOutput=FALSE,fileName="testSetEvaluation.txt"){
+  predict<-predict(predictableModel,testSet)
+  result<-confusionMatrix(table(predict,resultValue))
+  if(isOutput){
+    capture.output(result,file = fileName)
+  }
+  return(result)
+}
+
