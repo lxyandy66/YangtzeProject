@@ -29,6 +29,7 @@ library(adabag)
 library(kernlab)
 library(magrittr)
 library(lubridate)
+library(RWeka)
 
 ####预处理部分####
 getMode <- function(x) {
