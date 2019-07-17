@@ -326,3 +326,17 @@ predictTest<-function(testSet,resultValue,predictableModel,isOutput=FALSE,fileNa
   return(result)
 }
 
+####定义图片输出的函数####
+#适用于R自带的plot无法直接输出的情况，ggplot不适用，可直接ggsave
+#FUN作为一个接口，针对定制绘图用
+outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
+  png(filename = fileName,height = hit,width = wid)
+  tryCatch({
+    if(!is.na(FUN))
+      FUN(plottable)
+    else{
+      plot(plottable)
+    }
+  },error=function(e){cat("Plot fail! \nERROR :",conditionMessage(e),"\n")})
+  dev.off()
+}
