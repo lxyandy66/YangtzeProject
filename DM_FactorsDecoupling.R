@@ -25,14 +25,14 @@ ggplot(data=data.hznu.teaching.decoupling,aes(x=acCount))+geom_density()
 ggplot(data=data.hznu.teaching.decoupling,aes(x=setTemp))+geom_density()
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
-#作为整体准确度计算和算法评估的汇总
-stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))
-
-set.seed(711)
+#用于统一树类的剪枝情况
+localInitCP<-0.05
 
 ####训练集/测试集划分####
 #分块处理
-for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
+for(i in unique(data.hznu.teaching.decoupling$finalState)){
+  #作为整体准确度计算和算法评估的汇总
+  stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))[-1]
   for(j in unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)){
   
     data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState==i&clusterName==j]
@@ -50,7 +50,8 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
     
     
     ####训练集/测试集划分####
-    data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling.selected[complete.cases(data.hznu.teaching.decoupling.selected[,..decouplingAttr])]
+    set.seed(711)
+    # data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling.selected[complete.cases(data.hznu.teaching.decoupling.selected[,..decouplingAttr])]
     sub<-sample(1:nrow(data.hznu.teaching.decoupling.selected),round(nrow(data.hznu.teaching.decoupling.selected))*8/10)
     data.hznu.teaching.decoupling.training<-data.hznu.teaching.decoupling.selected[sub]
     data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
@@ -62,14 +63,15 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
     #CART决策树算法
     {
       algo<-"CART_Tree"
-      tree.both<-rpart(decouplingFormula,cp=0,#.001,
+      tree.both<-rpart(decouplingFormula,cp=localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
       tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])
       rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
       plot(rpartTrue2)
       #测试集验证
-      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
+      cmResult<-
+        predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
                             predictableModel = rpartTrue2)
       #结果输出
       outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
@@ -91,7 +93,7 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
     #ID3决策树算法
     {
       algo<-"ID3_Tree"
-      tree.both<-rpart(decouplingFormula,cp=0,#.001,
+      tree.both<-rpart(decouplingFormula,cp=localInitCP,
                        # maxsurrogate=100,maxcompete=10,
                        data=data.hznu.teaching.decoupling.training,parms=list(split="information"))#rpart,即经典决策树，必须都为factor或定性,连char都不行...
       tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])
@@ -186,14 +188,16 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
     
     {
       algo<-"RandomForest"
-      fit.forest<-randomForest(decouplingFormula,data=data.hznu.teaching.decoupling.training,ntree=1000)
+      fit.forest<-randomForest(decouplingFormula,data=data.hznu.teaching.decoupling.training,
+                               ntree=1000,cp=localInitCP,
+                               na.action = na.omit,importance=TRUE)
       #测试集验证
       cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
                             predictableModel = fit.forest)
       #结果输出
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo, fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
-                      other = list("nTree = 1000"))
+                      other = list("nTree = 1000",importance(fit.forest,type = 2)))
       outputImg(plottable = fit.forest,hit=480,wid=640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
       #内存结果保留
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
@@ -212,7 +216,8 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
     {
       algo<-"AdaBoost"
       fit.boost<-boosting(decouplingFormula,
-                          data=data.hznu.teaching.decoupling.training,mfinal = 200)
+                          data=data.hznu.teaching.decoupling.training,
+                          mfinal = 200,cp=localInitCP)
       #检查误差演变
       outputImg(FUN = function(x){
         plot(x$error,type="o",pch=17,ann=FALSE)
@@ -228,6 +233,7 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
                         capture.output(cmResult$error,file=fileName,append = TRUE)
                         capture.output(cmResult$confusion,file=fileName,append = TRUE)
                         capture.output(c("nIter = 200"),file=fileName,append = TRUE)
+                        capture.output(fit.boost$importance,file=fileName,append = TRUE)
                       })
       #内存结果保留
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
@@ -237,14 +243,13 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$confusion),
                                                      acc=1-cmResultTraining$error,setType="training"))
-      rm(fit.forest,cmResult,cmResultTraining)
+      rm(fit.boost,cmResult,cmResultTraining)
     }
     
     
     ####SVM####
     {
       algo<-"SVM"
-      
       if(length(unique(data.hznu.teaching.decoupling.selected$modiSeason))>1){
         svmFormula<-decouplingFormula
       }else{
@@ -255,8 +260,9 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
       
       regm<-ksvm(svmFormula,data=data.hznu.teaching.decoupling.training,
                  kernel="rbfdot",type="C-svc",C=10,cross=10)
-      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
-                            predictableModel = regm)
+      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test[complete.cases(data.hznu.teaching.decoupling.test[,..decouplingAttr])],
+                            resultValue = data.hznu.teaching.decoupling.test[complete.cases(data.hznu.teaching.decoupling.test[,..decouplingAttr])]$energyClusterName,
+                            predictableModel = regm )
       #结果输出
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo, fmla = svmFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"))
@@ -264,7 +270,8 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
+      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training[complete.cases(data.hznu.teaching.decoupling.training[,..decouplingAttr])],
+                                    resultValue = data.hznu.teaching.decoupling.training[complete.cases(data.hznu.teaching.decoupling.training[,..decouplingAttr])]$energyClusterName,
                                     predictableModel = regm)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
@@ -274,7 +281,13 @@ for(i in c("cooling")){#unique(data.hznu.teaching.decoupling$finalState)
       rm(regm,svmFormula,cmResultTraining,cmResult)
     }
   }
+  ####精确度汇总结果输出####
+  stat.hznu.decoupling.algoAcc$correctCount<-stat.hznu.decoupling.algoAcc$acc*stat.hznu.decoupling.algoAcc$count
+  stat.hznu.decoupling.algoAcc$wrongCount<-stat.hznu.decoupling.algoAcc$count*(1-stat.hznu.decoupling.algoAcc$acc)
+  write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round1.xlsx",sep = "_"))
 }
+
+
 
 ####获取不同空调数对应的面积等级####
 getAreaLevel<-function(acCount){
