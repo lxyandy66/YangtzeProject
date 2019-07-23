@@ -136,7 +136,8 @@ data.hznu.teaching.energy.final$meanUiElec<-
 
 #增加统计变量：房间空调使用时间电耗均值
 data.hznu.teaching.energy.final$meanUseRoomElec<-data.hznu.teaching.energy.final$sumElec/data.hznu.teaching.energy.final$runtime
-data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$sumElec/(data.hznu.teaching.energy.final$runtime*data.hznu.teaching.energy.final$acCount)
+data.hznu.teaching.energy.final$meanAcElec<-data.hznu.teaching.energy.final$sumElec/
+  (data.hznu.teaching.energy.final$runtime*data.hznu.teaching.energy.final$acCount)
 data.hznu.teaching.energy.final$meanAllElec<-data.hznu.teaching.energy.final$sumElec/15
 
 #对于单台空调能耗设上限
@@ -267,9 +268,16 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
   allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=paste(energyClusterName,finalState,sep = "_")]
+
 ggplot(data=stat.hznu.energy.tryCluster.descr,
        aes(x=runtime,y=sumElec,size=sdElec,color=energyClusterName))+
   geom_point()+facet_wrap(~finalState)+theme_bw()#+scale_size_area(range=c(0,50))
+
+
+ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyClusterName))+facet_wrap(~finalState)+geom_density2d(size=1,binwidth=0.002)+
+  geom_point(alpha=0.3,position = "jitter")+ylim(c(0,100))+#xlim(c(0,5))+#stat_density_2d(aes(fill=..level..,color=energyClusterName),geom="polygon")+
+  theme_bw()
+
 ggplot(data=data.hznu.teaching.energy.std,
        aes(x=energyClusterName,y=sumElec))+
   geom_boxplot()+facet_wrap(~finalState)+theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))

@@ -113,7 +113,7 @@ stat.hznu.thermo.season<-data.hznu.teaching.thermo.day.final.modify[,.(
       runtime=mean(runtime,na.rm = TRUE),
       range=mean(range,na.rm = TRUE),
       lowRatioValue=mean(lowRatioValue,na.rm = TRUE),
-      sd=sd(sd,na.rm = TRUE),
+      meanSd=mean(sd,na.rm = TRUE),###大哥你算sd的sd有什么用啊？！sd=sd(sd,na.rm = TRUE),
       meanTemp=mean(meanTemp,na.rm = TRUE),
       onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
       forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
@@ -161,46 +161,79 @@ for(i in names(list.hznu.teaching.thermo)){
 }#其实用lapply更好
 
 #heatmap测试
-tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[6]][1:300,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
+tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[6]][,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
                        id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
 tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
-for(i in names(list.hznu.teaching.thermo)){
-  tmp.plot.heatMap<-melt(list.hznu.teaching.thermo[[i]][,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
+data.hznu.teaching.thermo.final$labelSeasonState
+for(i in unique(data.hznu.teaching.thermo.final$labelSeasonState)){
+  tmp.plot.heatMap<-melt(data.hznu.teaching.thermo.final[labelSeasonState==i,c("thermoPattern",sprintf("modH%02d",8:22),"labelRoomDay","labelSeasonState")],
                          id.vars = c("thermoPattern","labelRoomDay","labelSeasonState"))
   tmp.plot.heatMap$hour<-substr(tmp.plot.heatMap$variable,5,6)
   range<-boxplot.stats(tmp.plot.heatMap$value)
+   rename(tmp.plot.heatMap,c(value="Temperature (℃)"))
   for(j in unique(tmp.plot.heatMap$thermoPattern))
   {
     ggsave(file=paste(i,j,"heatMap.png",sep = "_"),
-          plot=ggplot(data=tmp.plot.heatMap[thermoPattern==j],
-                      aes(x=hour,y=labelRoomDay,fill=value,group=thermoPattern))+
-               geom_raster(interpolate = FALSE)+
+          plot=ggplot(data=tmp.plot.heatMap[thermoPattern==j] %>% rename(.,c(value="Temperature")),
+                      aes(x=hour,y=labelRoomDay,fill=Temperature,group=thermoPattern))+
+               geom_raster(interpolate = TRUE)+
                scale_fill_gradient(limits = c(range$stats[1],range$stats[5]),low = "green",high = "red")+
                facet_wrap(~ thermoPattern, nrow = 2)+theme_classic()+
                theme(axis.title.y=element_blank(),axis.text.y=element_blank(), axis.ticks.y=element_blank()),
           width=4,height = 3,dpi = 80  
     )}
-  }
+}
 
 data.hznu.teaching.thermo.final<-list.hznu.teaching.thermo[[1]]
 for(i in 2:length(list.hznu.teaching.thermo)){
   data.hznu.teaching.thermo.final<-rbind(data.hznu.teaching.thermo.final,list.hznu.teaching.thermo[[i]])
 }
-
+data.hznu.teaching.thermo.final<-merge(x=data.hznu.teaching.thermo.final,
+                                       y=data.hznu.teaching.thermo.setTemp[,c("labelRoomDay","setTemp")],
+                                       all.x = TRUE,by.x="labelRoomDay",by.y="labelRoomDay")
 ####修正一下热环境模式名称####
 # 之后可以不进行此操作
 # 将所有热环境模式归类为Low; High; Mid-Stable; Mid-Fluctuation; High
 # unique(data.hznu.teaching.thermo.final$thermoPattern)
 # [1] "high"     "low"      "mid"      "mid-s"    "mid-v"    "mid-low"  "mid-high"
 
-tmp.changeName<-data.table(originName=unique(data.hznu.teaching.thermo.final$thermoPattern),
-                              ModiName=c("High","Low","Mid-Stable","Mid-Stable","Mid-Fluctuation","Mid-Stable","Mid-Fluctuation"))
 data.hznu.teaching.thermo.final$originThermoPatternName<-data.hznu.teaching.thermo.final$thermoPattern
+tmp.changeName<-data.table(originName=unique(data.hznu.teaching.thermo.final$originThermoPatternName),
+                              ModiName=c("HighT","LowT","MT-STBL","MT-STBL",
+                                         "MT-FLCT","MT-STBL","MT-FLCT"))
 data.hznu.teaching.thermo.final$thermoPattern<-apply(data.hznu.teaching.thermo.final[,"originThermoPatternName"],MARGIN = 1,
                                                      FUN = function(x){return(tmp.changeName[originName==x]$ModiName)})
 
 save(data.hznu.teaching.thermo.final,
      list.hznu.teaching.thermo,file = "HZNU_含追加_房间级_教学_热环境聚类完成.rdata")
+
+####按制冷和制热统计各模式的情况####
+# stat.hznu.thermo.descr.byMode<-
+data.hznu.teaching.thermo.final[,.(
+  finalState=finalState[1],
+  thermoPattern=thermoPattern[1],
+  count=length(labelRoomDay),
+  runtime=mean(runtime,na.rm = TRUE),
+  range=mean(range,na.rm = TRUE),
+  lowRatioValue=mean(lowRatioValue,na.rm = TRUE),
+  meanSd=mean(sd,na.rm = TRUE)
+  # meanSetTemp=mean(setTemp,na.rm = TRUE)#设定温度似乎没很大规律性
+),by=(labelModeThermoPattern<-paste(finalState,thermoPattern,sep = "_"))] %>% 
+  write.xlsx(x=.,file="HZNU_ThermoPattern_Evaluate_byMode.xlsx")
+
+data.hznu.teaching.thermo.final[,.(
+  modiSeason=modiSeason[1],
+  finalState=finalState[1],
+  thermoPattern=thermoPattern[1],
+  count=length(labelRoomDay),
+  runtime=mean(runtime,na.rm = TRUE),
+  meanTemp=mean(meanTemp,na.rm = TRUE),
+  range=mean(range,na.rm = TRUE),
+  lowRatioValue=mean(lowRatioValue,na.rm = TRUE),
+  sd=mean(sd,na.rm = TRUE)
+  # meanSetTemp=mean(setTemp,na.rm = TRUE)#设定温度似乎没很大规律性
+),by=(labelSeasonModeThermoPattern<-paste(modiSeason,finalState,thermoPattern,sep = "_"))] %>% 
+  write.xlsx(x=.,file="HZNU_ThermoPattern_Evaluate_bySeason.xlsx")
 
 nn1<-t(data.hznu.teaching.thermo.day.final.modify[labelRoomDay=="330100D255102_2017-09-04",c(sprintf("modH%02d",8:22))])
 nn1<-data.table(nn1[,1])

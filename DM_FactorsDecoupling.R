@@ -26,7 +26,7 @@ ggplot(data=data.hznu.teaching.decoupling,aes(x=setTemp))+geom_density()
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
 #用于统一树类的剪枝情况
-localInitCP<-0.05
+localInitCP<-0.01
 
 ####训练集/测试集划分####
 #分块处理
@@ -63,10 +63,11 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
     #CART决策树算法
     {
       algo<-"CART_Tree"
-      tree.both<-rpart(decouplingFormula,cp=localInitCP,
+      # decouplingFormula<-energyClusterName~clusterName+modiSeason+areaScale+runtime
+      tree.both<-rpart(decouplingFormula,cp=0.04,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
-      tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])
+      tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
       rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
       plot(rpartTrue2)
       #测试集验证
@@ -74,7 +75,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
         predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
                             predictableModel = rpartTrue2)
       #结果输出
-      outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
+      outputImg(rpartTrue2,hit=600,wid = 600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
                       other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
@@ -197,7 +198,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
       #结果输出
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo, fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
-                      other = list("nTree = 1000",importance(fit.forest,type = 2)))
+                      other = list("nTree = 1000",importance(fit.forest,type = 1),importance(fit.forest,type = 2)))
       outputImg(plottable = fit.forest,hit=480,wid=640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
       #内存结果保留
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
@@ -280,6 +281,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
       
       rm(regm,svmFormula,cmResultTraining,cmResult)
     }
+ 
   }
   ####精确度汇总结果输出####
   stat.hznu.decoupling.algoAcc$correctCount<-stat.hznu.decoupling.algoAcc$acc*stat.hznu.decoupling.algoAcc$count
