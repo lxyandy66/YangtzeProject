@@ -30,7 +30,7 @@ localInitCP<-0.01
 
 ####训练集/测试集划分####
 #分块处理
-for(i in unique(data.hznu.teaching.decoupling$finalState)){
+for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
   #作为整体准确度计算和算法评估的汇总
   stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))[-1]
   for(j in unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)){
@@ -45,7 +45,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
     data.hznu.teaching.decoupling.selected$runtimeClass<-as.factor(apply(X=data.hznu.teaching.decoupling.selected[,c("runtime")],
                                                                MARGIN = 1,FUN = getRuntimeClass))
     data.hznu.teaching.decoupling.selected$setTempClass<-as.factor(
-      apply(data.hznu.teaching.decoupling.selected[,c("setTemp")],MARGIN = 1,FUN = getSetTempClass))
+      apply(data.hznu.teaching.decoupling.selected[,c("setTemp")],MARGIN = 1,FUN = getSetTempClass,state=i))
     # data.hznu.teaching.decoupling.selected$runtime<-as.factor(data.hznu.teaching.decoupling.selected$runtime)
     
     
@@ -64,18 +64,34 @@ for(i in unique(data.hznu.teaching.decoupling$finalState)){
     {
       algo<-"CART_Tree"
       # decouplingFormula<-energyClusterName~clusterName+modiSeason+areaScale+runtime
-      tree.both<-rpart(decouplingFormula,cp=0.04,#localInitCP,
+      tree.both<-rpart(decouplingFormula,cp=0.01,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
       tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      # par(mfrow=c(1,1))
+      for(t in 0:5){
+        prp(tree.both,type=5,extra = "auto")
+      }
+      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0, 
+          split.fun = function(x, labs, digits, varlen, faclen){
+            # replace commas with spaces (needed for strwrap)
+            labs <- gsub(",", " ", labs)
+            for(i in 1:length(labs)) {
+              # split labs[i] into multiple lines
+              labs[i] <- paste(strwrap(labs[i], width = 8), collapse = ",\n")
+            }
+            labs
+          })
       rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
       plot(rpartTrue2)
       #测试集验证
       cmResult<-
         predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
                             predictableModel = rpartTrue2)
+        predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
+                    predictableModel = rpartTrue2)
       #结果输出
-      outputImg(rpartTrue2,hit=600,wid = 600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
+      outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
                       other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
@@ -315,15 +331,25 @@ getRuntimeClass<-function(time){
 }
 
 ####获取设定温度划分####  
-getSetTempClass<-function(setTemp){
+getSetTempClass<-function(setTemp,state){
   if(is.na(setTemp))
     return(NA)
-  if(setTemp<=24)
-    return("<=24")
-  if(setTemp<=26)
-    return("(24,26]")
-  if(setTemp>26)
-    return(">26")
+  if(state=="cooling"){
+    if(setTemp<=24)
+      return("<=24")
+    if(setTemp<=26)
+      return("(24,26]")
+    if(setTemp>26)
+      return(">26")
+  }
+  if(state=="heating"){
+    if(setTemp<=22)
+      return("<=22")
+    if(setTemp<=24)
+      return("(22,24]")
+    if(setTemp>24)
+      return(">24")
+  }
 }
   
   

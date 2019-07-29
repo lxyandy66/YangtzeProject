@@ -197,10 +197,10 @@ data.hznu.teaching.thermo.final<-merge(x=data.hznu.teaching.thermo.final,
 # unique(data.hznu.teaching.thermo.final$thermoPattern)
 # [1] "high"     "low"      "mid"      "mid-s"    "mid-v"    "mid-low"  "mid-high"
 
-data.hznu.teaching.thermo.final$originThermoPatternName<-data.hznu.teaching.thermo.final$thermoPattern
+# data.hznu.teaching.thermo.final$originThermoPatternName<-data.hznu.teaching.thermo.final$thermoPattern
 tmp.changeName<-data.table(originName=unique(data.hznu.teaching.thermo.final$originThermoPatternName),
-                              ModiName=c("HighT","LowT","MT-STBL","MT-STBL",
-                                         "MT-FLCT","MT-STBL","MT-FLCT"))
+                              ModiName=c("HighT","LowT","MT-CONC","MT-CONC",
+                                         "MT-DIFF","MT-CONC","MT-DIFF"))
 data.hznu.teaching.thermo.final$thermoPattern<-apply(data.hznu.teaching.thermo.final[,"originThermoPatternName"],MARGIN = 1,
                                                      FUN = function(x){return(tmp.changeName[originName==x]$ModiName)})
 
