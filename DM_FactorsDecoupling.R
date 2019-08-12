@@ -27,6 +27,7 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
 
 #用于统一树类的剪枝情况
 localInitCP<-0.01
+list.hznu.decoupling.cart<-list()
 
 ####训练集/测试集划分####
 #分块处理
@@ -64,26 +65,15 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     {
       algo<-"CART_Tree"
       # decouplingFormula<-energyClusterName~clusterName+modiSeason+areaScale+runtime
-      tree.both<-rpart(decouplingFormula,cp=0.01,#localInitCP,
+      tree.both<-rpart(decouplingFormula,cp=0.02,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
-      tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
       # par(mfrow=c(1,1))
-      for(t in 0:5){
-        prp(tree.both,type=5,extra = "auto")
-      }
-      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0, 
-          split.fun = function(x, labs, digits, varlen, faclen){
-            # replace commas with spaces (needed for strwrap)
-            labs <- gsub(",", " ", labs)
-            for(i in 1:length(labs)) {
-              # split labs[i] into multiple lines
-              labs[i] <- paste(strwrap(labs[i], width = 8), collapse = ",\n")
-            }
-            labs
-          })
+      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0)
       rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
-      plot(rpartTrue2)
+      list.hznu.decoupling.cart[[i]][[j]]<-tree.both
+      # plot(rpartTrue2)
       #测试集验证
       cmResult<-
         predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
@@ -91,7 +81,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
         predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
                     predictableModel = rpartTrue2)
       #结果输出
-      outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
+      # outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
                       other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
@@ -108,7 +98,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     }
     
     #ID3决策树算法
-    {
+    if(FALSE){
       algo<-"ID3_Tree"
       tree.both<-rpart(decouplingFormula,cp=localInitCP,
                        # maxsurrogate=100,maxcompete=10,
@@ -143,7 +133,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     # C50有问题
     
     # C4.5
-    {
+    if(FALSE){
       algo<-"C4.5_Tree_notBinary"
       tree.both<-J48(decouplingFormula,
                        data=data.hznu.teaching.decoupling.training,control = Weka_control(u=FALSE,M=5,R=TRUE,N=10))#输出有问题, B=TRUE会报错
@@ -176,7 +166,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     
     #CTree
-    {
+    if(FALSE){
       algo<-"cTree"
       tree.both<-ctree(decouplingFormula,
                        data=data.hznu.teaching.decoupling.training)
@@ -203,7 +193,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     # #随机森林
     
-    {
+    if(FALSE){
       algo<-"RandomForest"
       fit.forest<-randomForest(decouplingFormula,data=data.hznu.teaching.decoupling.training,
                                ntree=1000,cp=localInitCP,
@@ -230,7 +220,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     ####AdaBoost####
     #这里有问题
-    {
+    if(FALSE){
       algo<-"AdaBoost"
       fit.boost<-boosting(decouplingFormula,
                           data=data.hznu.teaching.decoupling.training,
@@ -265,7 +255,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     
     ####SVM####
-    {
+    if(FALSE){
       algo<-"SVM"
       if(length(unique(data.hznu.teaching.decoupling.selected$modiSeason))>1){
         svmFormula<-decouplingFormula
@@ -302,7 +292,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
   ####精确度汇总结果输出####
   stat.hznu.decoupling.algoAcc$correctCount<-stat.hznu.decoupling.algoAcc$acc*stat.hznu.decoupling.algoAcc$count
   stat.hznu.decoupling.algoAcc$wrongCount<-stat.hznu.decoupling.algoAcc$count*(1-stat.hznu.decoupling.algoAcc$acc)
-  write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round1.xlsx",sep = "_"))
+  write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round_final.xlsx",sep = "_"))
 }
 
 

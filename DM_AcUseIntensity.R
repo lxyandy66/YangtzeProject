@@ -38,5 +38,11 @@ data.hznu.all.use$capAcHour<-15*data.hznu.all.use$acCount
 data.hznu.all.use$realCapAcHour<-data.hznu.all.use$runtime*data.hznu.all.use$acCount
 #空调使用强度=实际空调小时数 / 实际空调小时数容量
 data.hznu.all.use$acIntensity<-data.hznu.all.use$sumAllAcRuntime/data.hznu.all.use$realCapAcHour
+#平均空调使用台数
+data.hznu.all.use$meanAcUsed<-apply(X = data.hznu.all.use[,c(sprintf("h%d",8:22))],MARGIN = 1,
+                                    FUN = function(x){mean(x[x!=0],na.rm = TRUE)})
+#日内平均空调使用率
+data.hznu.all.use$acUsedRate<-data.hznu.all.use$meanAcUsed/data.hznu.all.use$acCount
+
 
 save(data.hznu.all.use,file = "HZNU_含追加_全部类型_房间级_含使用强度_行为模式预处理完成.rdata")

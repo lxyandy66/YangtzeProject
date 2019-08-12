@@ -251,6 +251,15 @@ for(i in unique(data.hznu.teaching.energy.std$finalState)){
       info.energy.clusterName[finalState==i & patternCode==j]$patternName
   }
 }
+
+
+####加载房间使用强度指标####
+#接"HZNU_含追加_全部类型_房间级_含使用强度_行为模式预处理完成.rdata"
+# data.hznu.all.use 数据集
+data.hznu.teaching.energy.std<-merge(x=data.hznu.teaching.energy.std,
+                                     y=data.hznu.all.use[,c("labelRoomDay","acIntensity","acUsedRate","meanAcUsed")],
+                                     all.x = TRUE,by.x="labelRoomDay",by.y="labelRoomDay")
+
 stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   count=length(labelRoomDay),
   finalState=unique(finalState),
@@ -261,6 +270,10 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   sdElec=sd(sumElec,na.rm = TRUE),
   meanElec=mean(meanElec,na.rm = TRUE),
   meanAcElec=mean(meanAcElec,na.rm = TRUE),
+  meanAcUseIntensity=mean(acIntensity[acCount!=1],na.rm = TRUE),
+  meanAcUsedRate=mean(acUsedRate[acCount!=1],na.rm = TRUE),
+  meanAcCount=mean(acCount,na.rm = TRUE),
+  meanAcUsedCount=mean(meanAcUsed,na.rm = TRUE),
   onDemandUsage=length(labelRoomDay[clusterName=="OnDemand"]),
   forenoonUsage=length(labelRoomDay[clusterName=="Forenoon"]),
   afternoonUsage=length(labelRoomDay[clusterName=="Afternoon"]),
@@ -268,6 +281,8 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   laterDaytimeUsage=length(labelRoomDay[clusterName=="LateDayTime"]),
   allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=paste(energyClusterName,finalState,sep = "_")]
+
+# write.xlsx(x=stat.hznu.energy.tryCluster.descr,file = "HZNU___.xlsx")
 
 ggplot(data=stat.hznu.energy.tryCluster.descr,
        aes(x=runtime,y=sumElec,size=sdElec,color=energyClusterName))+
