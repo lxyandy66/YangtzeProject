@@ -33,6 +33,9 @@ library(RWeka)
 
 ####预处理部分####
 getMode <- function(x) {
+  if(length(x)==0){
+    return(NA)
+  }
   ux <- unique(x)
   tab <- tabulate(match(x, ux))
   ux[tab == max(tab)]
