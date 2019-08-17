@@ -1,4 +1,4 @@
-#本脚本用于统计空调开启的台数，用于能耗模式挖掘和解耦
+#本脚本用于统计空调开启的台数，以及小时能耗等，用于能耗模式挖掘和解耦
 #接"HZNU_含追加_末端级_行为模式预处理完成.rdata"
 #接 raw.rawData 数据集
 
@@ -46,3 +46,17 @@ data.hznu.all.use$acUsedRate<-data.hznu.all.use$meanAcUsed/data.hznu.all.use$acC
 
 
 save(data.hznu.all.use,file = "HZNU_含追加_全部类型_房间级_含使用强度_行为模式预处理完成.rdata")
+
+
+####统计空调小时电耗####
+#接 HZNU_含追加_末端级_能耗模式预处理完成_新清洗.rdata 
+#数据集 data.hznu.energy.ac.day
+
+#计算单台空调平均小时电耗
+data.hznu.energy.ac.day$elecIntensity<-apply(X=data.hznu.energy.ac.day[,c(sprintf("h%d",8:22))],MARGIN = 1,
+                                             FUN = function(x){ mean(x[x>0.2],na.rm = TRUE)})
+# nn<-data.hznu.energy.ac.day[!is.nan(data.hznu.energy.ac.day$elecIntensity),]
+
+  
+  
+  
