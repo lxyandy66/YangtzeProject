@@ -49,14 +49,39 @@ save(data.hznu.all.use,file = "HZNU_含追加_全部类型_房间级_含使用强度_行为模式预
 
 
 ####统计空调小时电耗####
-#接 HZNU_含追加_末端级_能耗模式预处理完成_新清洗.rdata 
-#数据集 data.hznu.energy.ac.day
+#接 HZNU_含追加_末端级_能耗模式预处理完成_新清洗.rdata HZNU_临时_仅教学_逐时房间能耗.rdata
+#数据集 data.hznu.energy.ac.day; temp.hznu.energy.room
 
-#计算单台空调平均小时电耗
-data.hznu.energy.ac.day$elecIntensity<-apply(X=data.hznu.energy.ac.day[,c(sprintf("h%d",8:22))],MARGIN = 1,
-                                             FUN = function(x){ mean(x[x>0.2],na.rm = TRUE)})
+# #计算单台空调平均小时电耗
+# #不这么算
+# data.hznu.energy.ac.day$elecIntensity<-apply(X=data.hznu.energy.ac.day[,c(sprintf("h%d",8:22))],MARGIN = 1,
+#                                              FUN = function(x){ mean(x[x>0.2],na.rm = TRUE)})
 # nn<-data.hznu.energy.ac.day[!is.nan(data.hznu.energy.ac.day$elecIntensity),]
 
-  
-  
-  
+####临时统计房间空调平均功率####
+temp.hznu.energy.room<-melt(data.hznu.teaching.energy.std[,c("labelRoomDay","roomCode","date","sumElec","runtime",sprintf("h%d",8:22))],
+                            id.var=c("labelRoomDay","roomCode","date","sumElec","runtime"))
+temp.hznu.energy.room<-temp.hznu.energy.room[!duplicated(temp.hznu.energy.room)]
+names(temp.hznu.energy.room)<-c("labelRoomDay","roomCode","date","sumElec","runtime","hour","roomElec")
+temp.hznu.energy.room$labelRoomHour<-paste(temp.hznu.energy.room$labelRoomDay,temp.hznu.energy.room$hour,sep = "_")
+# save(temp.hznu.energy.room,file="HZNU_临时_仅教学_逐时房间能耗.rdata")
+
+temp.hznu.acUse.room<-melt(data.hznu.all.use[,c("labelRoomDay","roomCode","date",sprintf("h%d",8:22))],id.var=c("labelRoomDay","roomCode","date"))
+names(temp.hznu.acUse.room)<-c("labelRoomDay","roomCode","date","hour","acUsedCount")
+temp.hznu.acUse.room$labelRoomHour<-paste(temp.hznu.acUse.room$labelRoomDay,temp.hznu.acUse.room$hour,sep = "_")
+
+#合并小时空调使用数量
+temp.hznu.energy.room<-merge(x=temp.hznu.energy.room,y=temp.hznu.acUse.room[,c("labelRoomHour","acUsedCount")],
+                             all.x = TRUE,by="labelRoomHour")
+temp.hznu.energy.room$meanPower<-temp.hznu.energy.room$roomElec/temp.hznu.energy.room$acUsedCount
+#这里有问题，行为中有设置能耗最低阈值，能耗清洗中没有
+temp.hznu.energy.room[is.nan(meanPower)|is.infinite(meanPower)]$meanPower<-NA
+#简单点吧
+temp.stat.energy.room<-temp.hznu.energy.room[,.(roomCode=roomCode[1],
+                                                date=date[1],
+                                                runtime=runtime[1],
+                                                countRuntime=sum(!is.na(meanPower)),
+                                                meanDailyAcElec=mean(meanPower[meanPower!=0],na.rm = TRUE)),by=labelRoomDay]
+save(temp.stat.energy.room,file = "HZNU_仅教学_时均空调单台电耗统计.rdata")
+
+
