@@ -46,3 +46,10 @@ data.hznu.all.use$acUsedRate<-data.hznu.all.use$meanAcUsed/data.hznu.all.use$acC
 
 
 save(data.hznu.all.use,file = "HZNU_含追加_全部类型_房间级_含使用强度_行为模式预处理完成.rdata")
+
+
+####临时统计房间空调平均功率####
+temp.hznu.energy.room<-melt(data.hznu.teaching.energy.std[,c("labelRoomDay","roomCode","date","sumElec","runtime",sprintf("h%d",8:22))],
+                            id.var=c("labelRoomDay","roomCode","date","sumElec","runtime"))
+save(temp.hznu.energy.room,file="HZNU_临时_仅教学_逐时房间能耗.rdata")
+
