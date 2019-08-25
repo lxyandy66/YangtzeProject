@@ -30,9 +30,16 @@ library(kernlab)
 library(magrittr)
 library(lubridate)
 library(RWeka)
+library(class)
+# library(Hmisc)
+library(kknn)
+library(knncat)
 
 ####预处理部分####
-getMode <- function(x) {
+getMode <- function(x,na.rm=FALSE) {
+  if(na.rm==TRUE){
+    x<-x[!is.na(x)]
+  }
   if(length(x)==0){
     return(NA)
   }
