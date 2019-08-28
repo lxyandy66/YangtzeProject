@@ -94,8 +94,10 @@ data.hznu.use.predict.building.processed$d7_OnRatio<-apply(X = data.hznu.use.pre
                                                            FUN = function(x){
                                                              return(data.hznu.use.predict.building.processed[labelBuildingDay==paste(x[1],as.Date(x[2])-7,sep = "_")]$onRatio[1])
                                                            })
+data.hznu.use.predict.building.processed$isWorkday<-isWeekday(data.hznu.use.predict.building.processed$date)
+
 ####相关性检验####
-usagePredictAttr<-c("meanOutTemp","meanRhOut","meanWindSpeed","maxOutTemp","minOutTemp","weekday",
+usagePredictAttr<-c("meanOutTemp","meanRhOut","meanWindSpeed","maxOutTemp","minOutTemp","isWorkday",
                     "d1_OnRatio","d2_OnRatio","d3_OnRatio","d4_OnRatio","d5_OnRatio","d6_OnRatio","d7_OnRatio")
 
 stat.hznu.usage.predict.cor<-data.table(finalState="cooling",cor(use = "complete.obs",method = "spearman",
@@ -106,11 +108,12 @@ stat.hznu.usage.predict.cor<-rbind(stat.hznu.usage.predict.cor,
                                               cor(use = "complete.obs",method = "spearman",
                                                   x=data.hznu.use.predict.building.processed[onRatio!=0&finalState=="cooling","onRatio"],
                                                   y=data.hznu.use.predict.building.processed[onRatio!=0&finalState=="cooling",..usagePredictAttr])))
+
 write.xlsx(stat.hznu.usage.predict.cor,file = "HZNU_Usage_Predict_Pearson.xlsx")
 
 ####logistic回归变量显著性####
 usagePredictFormula<-as.formula(paste("onRatio ~ ",paste(usagePredictAttr,collapse = "+")))
-fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState=="heating"],family = binomial(),na.action = na.omit)
+fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[modiSeason=="Transition"],family = binomial(),na.action = na.omit)
 stat.fit<-summary(fit)
 stat.hznu.use.predict.sign<-data.table(finalState="heating",modiSeason="all",var=row.names(stat.fit$coefficients),stat.fit$coefficients)
 
@@ -178,5 +181,59 @@ for(i in unique(data.hznu.use.predict.building.processed$finalState)){
     # For with, the value of the evaluated expr. For within, the modified object.
   }
 }
+
+
+list.hznu.use.predict<-split(x=data.hznu.use.predict.building.processed,by = "modiSeason")
+stat.hznu.use.predict.knn.kSelect<-data.table(modiSeason=character(),finalState=character(),
+                                              kSize=numeric(),meanEucDist=numeric(),sdEucDist=numeric(),meanErr=numeric())[0]#,meanErrRatio=numeric()
+#确定最佳K值
+for(modeSelect in names(list.hznu.use.predict)){
+  data.hznu.use.predict.knn.select<-list.hznu.use.predict[[modeSelect]]
+  #数据集统计
+  # length(unique(data.hznu.use.predict.knn.select$labelBuildingDay)) #2223
+  # length(unique(data.hznu.use.predict.knn.select$date)) #149
+  
+  knnAttr<-c("stdMeanTemp","stdMinTemp","stdMaxTemp","stdMeanRh","stdMeanWind","isWorkday","d1_OnRatio","d7_OnRatio")
+  knnFormula<-as.formula(paste("onRatio ~ ",paste(knnAttr,collapse = "+")))
+  
+  data.hznu.use.predict.knn.select<-data.hznu.use.predict.knn.select[complete.cases(data.hznu.use.predict.knn.select[,..knnAttr])]
+  set.seed(711)
+  sub<-sample(1:nrow(data.hznu.use.predict.knn.select),round(nrow(data.hznu.use.predict.knn.select))*4/5)
+  data.hznu.use.predict.knn.select.training<-data.hznu.use.predict.knn.select[sub]
+  data.hznu.use.predict.knn.select.test<-data.hznu.use.predict.knn.select[-sub]
+  
+  
+  
+  # ggplot(data=list.hznu.use.predict[[modeSelect]][buildingCode=="330100D280"],aes(x=date,y=onRatio,group=buildingCode,color=buildingCode))+geom_line()
+  
+  for(i in 3:15){
+    fit.kknn<-
+      kknn(formula = usagePredictFormula,kernel = "optimal",k=i,
+           train = data.hznu.use.predict.knn.select.training,
+           test = data.hznu.use.predict.knn.select.test)
+    #fit.kknn中包括有所有测试集中对应的近邻样本
+    data.hznu.use.predict.knn.select.test$predictOnRatio<-fit.kknn$fitted.values
+    data.hznu.use.predict.knn.select.test$meanEucDist<-apply(fit.kknn$W*fit.kknn$D,MARGIN = 1,FUN = mean,na.rm=TRUE)
+    data.hznu.use.predict.knn.select.test$sdEucDist<-apply(fit.kknn$W*fit.kknn$D,MARGIN = 1,FUN = sd,na.rm=TRUE)
+    #试一试
+    stat.hznu.use.predict.knn.kSelect<-rbind(stat.hznu.use.predict.knn.kSelect,
+                                             data.table(modiSeason=modeSelect,
+                                                        finalState=getMode(data.hznu.use.predict.knn.select.test[finalState!="off"]$finalState),
+                                                        kSize=i,
+                                                        meanEucDist=mean(data.hznu.use.predict.knn.select.test$meanEucDist,na.rm = TRUE),
+                                                        sdEucDist=mean(data.hznu.use.predict.knn.select.test$sdEucDist,na.rm = TRUE),
+                                                        meanErr=mean(abs(data.hznu.use.predict.knn.select.test$onRatio-data.hznu.use.predict.knn.select.test$predictOnRatio),na.rm=TRUE)
+                                                        # meanErrRatio=mean(abs(data.hznu.use.predict.knn.select.test$onRatio-data.hznu.use.predict.knn.select.test$predictOnRatio)/
+                                                        #                     data.hznu.use.predict.knn.select.test$onRatio,na.rm=TRUE)
+                                                        ))
+  }
+}
+stat.hznu.use.predict.knn.kSelect$errLev<- with(stat.hznu.use.predict.knn.kSelect,{
+  meanErr/apply(X=as.matrix(modiSeason),MARGIN = 1,FUN = function(x){ max(stat.hznu.use.predict.knn.kSelect[modiSeason==x]$meanErr,na.rm = TRUE)})})
+                                           
+ggplot(data=stat.hznu.use.predict.knn.kSelect,aes(x=kSize,y=errLev,group=modiSeason,shape=modiSeason,color=modiSeason))+geom_point()+geom_line()
+write.xlsx(stat.hznu.use.predict.knn.kSelect,file = "HZNU_Use_Predict_kNN_kSelection.xlsx")
+nn<-list.hznu.use.predict[[modeSelect]][labelBuildingDay!="330100D280_2017-03-02"][fit.kknn$C]
+
 
 
