@@ -413,8 +413,24 @@ data.weather.airport.daily<-data.weather.airport.final[,.(meanOutTemp=mean(outTe
                                                           maxOutTemp=max(outTemp,na.rm = TRUE),
                                                           minOutTemp=min(outTemp,na.rm = TRUE),
                                                           meanRhOut=mean(rhOut,na.rm = TRUE),
-                                                          meanWindSpeed=mean(windSpeed,na.rm = TRUE),
-                                                          weather=getMode(weather[!is.na(weather)])
+                                                          meanWindSpeed=mean(windSpeed,na.rm = TRUE)#,
+                                                          # weather=getMode(weather[!is.na(weather)])
                                                           ),by=(date=substr(data.weather.airport.final$datetime,1,10))]
+
+####统计杭州各月气象####
+#按小时平均
+data.weather.airport.monthly<- data.weather.airport.final %>% 
+                               mutate(.,month=substr(labelHour,6,7)) %>% 
+                               .[substr(labelHour,1,4)!="2019",.(meanOutTemp=mean(outTemp,na.rm = TRUE),
+                                    maxOutTemp=max(outTemp,na.rm = TRUE),
+                                    minOutTemp=min(outTemp,na.rm = TRUE),
+                                    meanOutRh=mean(rhOut[rhOut<=1&rhOut>0],na.rm = TRUE)),by=month]
+#按日平均
+data.weather.airport.monthly<- data.weather.airport.daily %>% 
+                               mutate(.,month=substr(date,6,7)) %>% 
+                               .[substr(date,1,4)!="2019",.(meanOutTemp=mean(meanOutTemp,na.rm = TRUE),
+                                    maxOutTemp=max(meanOutTemp,na.rm = TRUE),
+                                    minOutTemp=min(meanOutTemp,na.rm = TRUE),
+                                    meanOutRh=mean(meanRhOut[meanRhOut<=1&meanRhOut>0],na.rm = TRUE)),by=month]
 
 
