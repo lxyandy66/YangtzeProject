@@ -16,7 +16,7 @@ modiSelect<-"heating"
 {
   # 训练集测试集划分
   data.hznu.energy.decoupling.select<-data.hznu.energy.decoupling[finalState==modiSelect]
-  set.seed(19950711)
+  set.seed(711)
   sub<-sample(1:nrow(data.hznu.energy.decoupling.select),round(nrow(data.hznu.energy.decoupling.select))*3/4)
   data.hznu.energy.decoupling.select.training<-data.hznu.energy.decoupling.select[sub]
   data.hznu.energy.decoupling.select.test<-data.hznu.energy.decoupling.select[-sub]

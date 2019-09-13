@@ -34,15 +34,18 @@ library(class)
 # library(Hmisc)
 library(kknn)
 library(knncat)
+library(car)
 
 ####预处理部分####
 getMode <- function(x,na.rm=FALSE) {
   if(na.rm==TRUE){
     x<-x[!is.na(x)]
+  }else{
+    if(anyNA(x)){
+      return(NA)
+    }
   }
-  if(length(x)==0){
-    return(NA)
-  }
+
   ux <- unique(x)
   tab <- tabulate(match(x, ux))
   ux[tab == max(tab)]

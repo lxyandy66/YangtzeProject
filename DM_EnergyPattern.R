@@ -252,6 +252,14 @@ for(i in unique(data.hznu.teaching.energy.std$finalState)){
   }
 }
 
+####统一能耗参数命名####
+#此处注意无需重复执行
+data.hznu.teaching.energy.std[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
+data.hznu.teaching.energy.std[energyClusterName=="MidTime_MidEnergy"]$energyClusterName<-"MidEnergy"
+data.hznu.teaching.energy.std[energyClusterName=="LongTime_LowEnergy"]$energyClusterName<-"LongTime_MidEnergy"
+data.hznu.teaching.energy.std[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"LongTime_HighEnergy"
+ggplot(data.hznu.teaching.energy.std,aes(x=energyClusterName,y=sumElec))+geom_boxplot()
+
 
 ####加载房间使用强度指标####
 #接"HZNU_含追加_全部类型_房间级_含使用强度_行为模式预处理完成.rdata"

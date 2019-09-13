@@ -10,6 +10,7 @@ data.hznu.teaching.decoupling<-merge(
   y=data.hznu.teaching.thermo.final[,c("labelRoomDay","runtime","modiSeason","finalState","clusterName","thermoPattern")],
   all.x = TRUE,by.x = "labelRoomDay",by.y = "labelRoomDay")
 
+
 ####加入其他热环境参数####
 #加入设定温度
 data.hznu.teaching.decoupling<-merge(x=data.hznu.teaching.decoupling,y=data.hznu.teaching.thermo.setTemp[,c("labelRoomDay","setTemp")],
@@ -25,13 +26,21 @@ ggplot(data=data.hznu.teaching.decoupling,aes(x=acCount))+geom_density()
 ggplot(data=data.hznu.teaching.decoupling,aes(x=setTemp))+geom_density()
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
+####统一能耗模式参数命名####
+#此处注意无需重复执行
+data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
+data.hznu.teaching.decoupling[energyClusterName=="MidTime_MidEnergy"]$energyClusterName<-"MidEnergy"
+data.hznu.teaching.decoupling[energyClusterName=="LongTime_LowEnergy"]$energyClusterName<-"LongTime_MidEnergy"
+data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"LongTime_HighEnergy"
+
+
 #用于统一树类的剪枝情况
 localInitCP<-0.01
 list.hznu.decoupling.cart<-list()
 
 ####训练集/测试集划分####
 #分块处理
-for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
+for(i in unique(data.hznu.teaching.decoupling$finalState) ){
   #作为整体准确度计算和算法评估的汇总
   stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))[-1]
   for(j in unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)){
@@ -58,21 +67,21 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
     
     ####定义能耗解耦关系式####
-    decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTempClass","meanOutTemp","meanRhOut","runtime")
+    decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTemp","meanOutTemp","meanRhOut","runtime")
     decouplingFormula<-as.formula(paste("energyClusterName ~ ",paste(decouplingAttr,collapse = "+")))
     
     #CART决策树算法
     {
       algo<-"CART_Tree"
       # decouplingFormula<-energyClusterName~clusterName+modiSeason+areaScale+runtime
-      tree.both<-rpart(decouplingFormula,cp=0.02,#localInitCP,
+      tree.both<-rpart(decouplingFormula,cp=localInitCP,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
-      # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
       # par(mfrow=c(1,1))
-      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0)
+      # prp(tree.both,type=5,extra = 8,varlen=0,faclen=0)
       rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
-      list.hznu.decoupling.cart[[i]][[j]]<-tree.both
+      # list.hznu.decoupling.cart[[i]][[j]]<-tree.both
       # plot(rpartTrue2)
       #测试集验证
       cmResult<-
@@ -81,7 +90,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
         predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
                     predictableModel = rpartTrue2)
       #结果输出
-      # outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
+      outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
                       other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
@@ -98,7 +107,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     }
     
     #ID3决策树算法
-    if(FALSE){
+    if(TRUE){
       algo<-"ID3_Tree"
       tree.both<-rpart(decouplingFormula,cp=localInitCP,
                        # maxsurrogate=100,maxcompete=10,
@@ -133,7 +142,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     # C50有问题
     
     # C4.5
-    if(FALSE){
+    if(TRUE){
       algo<-"C4.5_Tree_notBinary"
       tree.both<-J48(decouplingFormula,
                        data=data.hznu.teaching.decoupling.training,control = Weka_control(u=FALSE,M=5,R=TRUE,N=10))#输出有问题, B=TRUE会报错
@@ -166,7 +175,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     
     #CTree
-    if(FALSE){
+    if(TRUE){
       algo<-"cTree"
       tree.both<-ctree(decouplingFormula,
                        data=data.hznu.teaching.decoupling.training)
@@ -193,7 +202,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     # #随机森林
     
-    if(FALSE){
+    if(TRUE){
       algo<-"RandomForest"
       fit.forest<-randomForest(decouplingFormula,data=data.hznu.teaching.decoupling.training,
                                ntree=1000,cp=localInitCP,
@@ -220,7 +229,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     ####AdaBoost####
     #这里有问题
-    if(FALSE){
+    if(TRUE){
       algo<-"AdaBoost"
       fit.boost<-boosting(decouplingFormula,
                           data=data.hznu.teaching.decoupling.training,
@@ -255,7 +264,7 @@ for(i in c("heating") ){#unique(data.hznu.teaching.decoupling$finalState)
     
     
     ####SVM####
-    if(FALSE){
+    if(TRUE){
       algo<-"SVM"
       if(length(unique(data.hznu.teaching.decoupling.selected$modiSeason))>1){
         svmFormula<-decouplingFormula
