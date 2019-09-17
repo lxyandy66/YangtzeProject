@@ -33,9 +33,9 @@ data.hznu.building.use<-data.hznu.all.use[,c("labelRoomDay","roomCode","date","f
                          buildingCode=buildingCode[1],
                          count=length(labelRoomDay),#该小时该栋楼总记录数
                          hour=hour[1],
-                         onCount=length(labelRoomDay[onOff!=0]),
-                         offCount=length(labelRoomDay[onOff==0]),
-                         dayOnCount=length(labelRoomDay[runtime!=0]),
+                         onCount=length(labelRoomDay[onOff!=0]),#当前小时总on记录数
+                         offCount=length(labelRoomDay[onOff==0]),#当前小时总off记录数
+                         dayOnCount=length(labelRoomDay[runtime!=0]),#当前小时记录属于acOnDay记录数
                          dayOffCount=length(labelRoomDay[runtime==0]),
                          acCount=sum(acCount,na.rm=TRUE),
                          acUsedCount=sum(value,na.rm=TRUE)
@@ -64,5 +64,16 @@ data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,
                                   y=data.weather.airport.final[!duplicated(data.weather.airport.final[,"datetime"]),
                                                                c("datetime","outTemp","rhOut","windSpeed","weather")],
                                   all.x = TRUE,by.x = "datetime",by.y = "datetime")
+####加一些辅助变量####
+data.hznu.area.predict.raw<-data.hznu.area.predict.raw %>%
+                            mutate(.,fullOnRatio=onCount/count,dayOnRatio=onCount/dayOnCount)
+
+data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
+data.hznu.area.predict.raw$d1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
+data.hznu.area.predict.raw$d7_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                  FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=7*24*3600)
+
 
 

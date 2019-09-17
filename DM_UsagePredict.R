@@ -117,24 +117,31 @@ write.xlsx(stat.hznu.usage.predict.cor,file = "HZNU_Usage_Predict_Pearson.xlsx")
 ####logistic回归变量显著性####
 
 usagePredictFormula<-as.formula(paste("onRatio ~ ",paste(usagePredictAttr,collapse = "+")))
-scatterplotMatrix(data.hznu.use.predict.building.processed[onRatio!=0&finalState=="heating",..usagePredictAttr],spread=FALSE,smoother.args=list(lty=2))
+signAttr<-list(weatherAttr=c("meanOutTemp","meanRhOut","meanWindSpeed","maxOutTemp","minOutTemp","weekday"),
+                    hstAttr=c("d1_OnRatio","d2_OnRatio","d3_OnRatio","d4_OnRatio","d5_OnRatio","d6_OnRatio","d7_OnRatio"))
+# scatterplotMatrix(data.hznu.use.predict.building.processed[onRatio!=0&finalState=="heating",..usagePredictAttr],spread=FALSE,smoother.args=list(lty=2))
 
-fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[modiSeason=="Transition"],family = binomial(),na.action = na.omit)
+fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState=="heating"],family = binomial(),na.action = na.omit)
 stat.fit<-summary(fit)
 stat.hznu.use.predict.sign<-data.table(finalState="heating",modiSeason="all",var=row.names(stat.fit$coefficients),stat.fit$coefficients)
 
 fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState=="cooling"],family = binomial(),na.action = na.omit)
 stat.fit<-summary(fit)
-stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState="cooling",modiSeason="all",var=row.names(stat.fit$coefficients),stat.fit$coefficients))
+stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState="cooling",
+                                                                        modiSeason="all",
+                                                                        var=row.names(stat.fit$coefficients),
+                                                                        stat.fit$coefficients))
 
 for(i in unique(data.hznu.use.predict.building.processed[finalState!="off"]$finalState)){
   for(j in unique(data.hznu.use.predict.building.processed[finalState==i]$modiSeason)){
-    fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState==i & modiSeason==j],family = binomial(),na.action = na.omit)
-    stat.fit<-summary(fit)
-    stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState=i,modiSeason=j,var=row.names(stat.fit$coefficients),stat.fit$coefficients))
+    for(k in names(signAttr)){
+      fit<-glm(as.formula(paste("onRatio ~ ",paste(signAttr[[k]],collapse = "+"))),
+               data=data.hznu.use.predict.building.processed[finalState==i & modiSeason==j],family = binomial(),na.action = na.omit)
+      stat.fit<-summary(fit)
+      stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState=i,modiSeason=j,var=row.names(stat.fit$coefficients),stat.fit$coefficients))}
   }
 }
-write.xlsx(stat.hznu.use.predict.sign,file = "HZNU_Usage_Predict_Sign.xlsx")
+write.xlsx(stat.hznu.use.predict.sign,file = "HZNU_Usage_Predict_Sign_split.xlsx")
 
 ####预测部分####
 #几个变量归一化
@@ -204,7 +211,8 @@ for(modeSelect in names(list.hznu.use.predict)){
   knnAttr<-c("stdMeanTemp","stdMinTemp","stdMaxTemp","stdMeanRh","stdMeanWind","weekday","isWorkday","d1_OnRatio","d7_OnRatio")
   knnFormula<-as.formula(paste("onRatio ~ ",paste(knnAttr,collapse = "+")))
   
-  data.hznu.use.predict.knn.select<-data.hznu.use.predict.knn.select[complete.cases(data.hznu.use.predict.knn.select[,..knnAttr])] %>% .[!duplicated(.$labelBuildingDay)]
+  data.hznu.use.predict.knn.select<-data.hznu.use.predict.knn.select[complete.cases(data.hznu.use.predict.knn.select[,..knnAttr])] %>% 
+                                    .[!duplicated(.$labelBuildingDay)]
   
   # set.seed(711)
   # sub<-sample(1:nrow(data.hznu.use.predict.knn.select),round(nrow(data.hznu.use.predict.knn.select))*4/5)
@@ -253,8 +261,9 @@ ggplot(data=stat.hznu.use.predict.knn.kSelect,#[kSize<100],
 
 ####试一试KNN作预测####
 stat.hznu.use.predict.knn<-data.hznu.use.predict.knn.select.test[,.(meanErr=mean(abs(onRatio-predictOnRatio),na.rm=TRUE)),by=buildingCode]
-ggplot(data=(data.hznu.use.predict.knn.select.test[buildingCode %in% sprintf("330100D%d",c(255,260,273,280,281)),c("date","buildingCode","onRatio","predictOnRatio")] %>% 
-               melt(data=.,id.var=c("date","buildingCode")) ),
+ggplot(data=(data.hznu.use.predict.knn.select.test[buildingCode %in% sprintf("330100D%d",c(255,260,273,280,281)),
+                                                   c("date","buildingCode","onRatio","predictOnRatio")] %>% 
+             melt(data=.,id.var=c("date","buildingCode")) ),
        aes(x=date,y=value,group=variable,color=variable,shape=variable))+geom_line()+geom_point()+facet_wrap(~buildingCode,nrow = 5)
 #summer_warm 2017 262 273 277 /257 262
 #summer 255 260 273 280 281
@@ -268,6 +277,33 @@ ggplot(temp.knn.dist[sampleID<=20],aes(x=simNo,y=value,group=sampleID,color=samp
 
 write.xlsx(stat.hznu.use.predict.knn.kSelect,file = "HZNU_Use_Predict_kNN_kSelection.xlsx")
 nn<-list.hznu.use.predict[[modeSelect]][labelBuildingDay!="330100D280_2017-03-02"][fit.kknn$C]
+
+####To TX####
+# > usagePredictFormula:
+# onRatio ~ onRatio + meanOutTemp + meanRhOut + meanWindSpeed + 
+#   maxOutTemp + minOutTemp + weekday + d1_OnRatio + d2_OnRatio + 
+#   d3_OnRatio + d4_OnRatio + d5_OnRatio + d6_OnRatio + d7_OnRatio
+
+fit<-randomForest(data=data.hznu.use.predict.knn.select.training,usagePredictFormula,ntree=300)#随机森林回归建模
+importance(fit,type=1)#重要性分析，type1或2，不同的指标
+
+#训练集上的预测
+temp.predict.training<-data.table(predict(fit,data.hznu.use.predict.knn.select.training))
+getRSquare(temp.predict.training$V1,data.hznu.use.predict.knn.select.training$onRatio)
+getMAPE(temp.predict.training$V1,data.hznu.use.predict.knn.select.training$onRatio)
+#选一栋建筑作图
+ggplot(data=cbind(temp.predict.training$V1,
+                  data.hznu.use.predict.knn.select.training[,c("date","onRatio","buildingCode")])[buildingCode=="330100D278"])+
+  geom_line(aes(x=date,y=V1,color="red",group=buildingCode))+geom_line(aes(x=date,y=onRatio,color="blue",group=buildingCode))
+
+#测试集上的预测
+temp.predict.test<-data.table(predict(fit,data.hznu.use.predict.knn.select.test))
+getRSquare(temp.predict.test$V1,data.hznu.use.predict.knn.select.test$onRatio)
+getMAPE(temp.predict.test$V1,data.hznu.use.predict.knn.select.test$onRatio)
+#选一栋建筑作图
+ggplot(data=cbind(temp.predict.test$V1,
+                  data.hznu.use.predict.knn.select.test[,c("date","onRatio","buildingCode")])[buildingCode=="330100D281"])+
+  geom_line(aes(x=date,y=V1,color="red",group=buildingCode))+geom_line(aes(x=date,y=onRatio,color="blue",group=buildingCode))
 
 
 

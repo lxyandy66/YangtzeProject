@@ -305,7 +305,7 @@ getWaterVp<-function(x){
 
 ####将时间间隔四舍五入至标准间隔####
 fixTimeInterval<-function(x,invl,originTime="1970-01-01 00:00.00 UTC"){
-  return(as.POSIXct(round(as.numeric(x)/invl)*iclassssssnvl,origin=originTime))
+  return(as.POSIXct(round(as.numeric(x)/invl)*invl,origin=originTime))
 }
 
 
@@ -353,3 +353,15 @@ outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
   },error=function(e){cat("Plot fail! \nERROR :",conditionMessage(e),"\n")})
   dev.off()
 }
+
+
+####从数据框中获取特定时间间隔之后的数据####
+# thisTime: 当前时间, 时间点, 适用于apply
+# data: 数据框, 包含数据中时间列，目标值列
+getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl){
+  data<-as.data.table(data)
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  return(as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#data[.(targetTime),on= ..timeColName][..targetColName]#理论是可以的，但是on的传参传不进去
+}
+
+
