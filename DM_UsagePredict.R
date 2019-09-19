@@ -123,12 +123,13 @@ signAttr<-list(weatherAttr=c("meanOutTemp","meanRhOut","meanWindSpeed","maxOutTe
 
 fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState=="heating"],family = binomial(),na.action = na.omit)
 stat.fit<-summary(fit)
-stat.hznu.use.predict.sign<-data.table(finalState="heating",modiSeason="all",var=row.names(stat.fit$coefficients),stat.fit$coefficients)
+stat.hznu.use.predict.sign<-data.table(finalState="heating",modiSeason="all",attr="all",var=row.names(stat.fit$coefficients),stat.fit$coefficients)
 
 fit<-glm(usagePredictFormula,data=data.hznu.use.predict.building.processed[finalState=="cooling"],family = binomial(),na.action = na.omit)
 stat.fit<-summary(fit)
 stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState="cooling",
                                                                         modiSeason="all",
+                                                                        attr="all",
                                                                         var=row.names(stat.fit$coefficients),
                                                                         stat.fit$coefficients))
 
@@ -138,7 +139,8 @@ for(i in unique(data.hznu.use.predict.building.processed[finalState!="off"]$fina
       fit<-glm(as.formula(paste("onRatio ~ ",paste(signAttr[[k]],collapse = "+"))),
                data=data.hznu.use.predict.building.processed[finalState==i & modiSeason==j],family = binomial(),na.action = na.omit)
       stat.fit<-summary(fit)
-      stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState=i,modiSeason=j,var=row.names(stat.fit$coefficients),stat.fit$coefficients))}
+      stat.hznu.use.predict.sign<-rbind(stat.hznu.use.predict.sign,data.table(finalState=i,modiSeason=j,attr=k,
+                                                                              var=row.names(stat.fit$coefficients),stat.fit$coefficients))}
   }
 }
 write.xlsx(stat.hznu.use.predict.sign,file = "HZNU_Usage_Predict_Sign_split.xlsx")
@@ -279,10 +281,10 @@ write.xlsx(stat.hznu.use.predict.knn.kSelect,file = "HZNU_Use_Predict_kNN_kSelec
 nn<-list.hznu.use.predict[[modeSelect]][labelBuildingDay!="330100D280_2017-03-02"][fit.kknn$C]
 
 ####To TX####
-# > usagePredictFormula:
-# onRatio ~ onRatio + meanOutTemp + meanRhOut + meanWindSpeed + 
-#   maxOutTemp + minOutTemp + weekday + d1_OnRatio + d2_OnRatio + 
-#   d3_OnRatio + d4_OnRatio + d5_OnRatio + d6_OnRatio + d7_OnRatio
+usagePredictFormula<-
+onRatio ~ meanOutTemp + meanRhOut + meanWindSpeed +
+  maxOutTemp + minOutTemp + weekday + d1_OnRatio + d2_OnRatio +
+  d3_OnRatio + d4_OnRatio + d5_OnRatio + d6_OnRatio + d7_OnRatio
 
 fit<-randomForest(data=data.hznu.use.predict.knn.select.training,usagePredictFormula,ntree=300)#随机森林回归建模
 importance(fit,type=1)#重要性分析，type1或2，不同的指标
@@ -296,7 +298,7 @@ ggplot(data=cbind(temp.predict.training$V1,
                   data.hznu.use.predict.knn.select.training[,c("date","onRatio","buildingCode")])[buildingCode=="330100D278"])+
   geom_line(aes(x=date,y=V1,color="red",group=buildingCode))+geom_line(aes(x=date,y=onRatio,color="blue",group=buildingCode))
 
-#测试集上的预测
+#测试集上的预测，惨不忍睹
 temp.predict.test<-data.table(predict(fit,data.hznu.use.predict.knn.select.test))
 getRSquare(temp.predict.test$V1,data.hznu.use.predict.knn.select.test$onRatio)
 getMAPE(temp.predict.test$V1,data.hznu.use.predict.knn.select.test$onRatio)
