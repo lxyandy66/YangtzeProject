@@ -28,4 +28,9 @@ data.all$roomCode<-apply(data.all[,"ac_code"],MARGIN=1,FUN=getSplitMember,splitS
 
 data.all<-data.all[!is.na(ac_code)]
 data.all$roomCode<-as.character(strsplit(data.all$ac_code,split = "m")[[1]][1])
+# stat.hznu.roomAc<-as.data.table(read.xlsx(file = "HZNU_AcStat.xlsx",sheetIndex = 1))
 stat.hznu.roomAc<-data.all[!is.na(ac_code),.(acCount=length(unique(ac_code))),by=roomCode]
+stat.hznu.roomAc$buildingCode<-substr(stat.hznu.roomAc$roomCode,1,10)
+stat.hznu.roomAc<-merge(x=stat.hznu.roomAc,y=data.mapping.buildingType[,c("buildingCode","type")],
+                        by.x = "buildingCode",by.y="buildingCode",all.x = TRUE)
+write.xlsx(x = stat.hznu.roomAc,file="HZNU_AcStat.xlsx")

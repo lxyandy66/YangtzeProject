@@ -76,13 +76,13 @@ for(i in c(0,1,2,7)){#0天，1天，2天，7天前
     if(!(i==0&j==0)){#i,j即天和小时不同时为0
       data.hznu.area.signCheck[,paste("d",i,"h",j,"_FullOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
                                                                                    FUN = getIntervalData,
-                                                                                   data=data.hznu.area.signCheck,timeColName="datetime",targetColName="fullOnRatio",timeInvl=i*24*3600+j*3600)
+                                                                                   data=data.hznu.area.signCheck,timeColName="datetime",targetColName="fullOnRatio",timeInvl=-i*24*3600-j*3600)
       data.hznu.area.signCheck[,paste("d",i,"h",j,"_DayOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
                                                                                   FUN = getIntervalData,
-                                                                                  data=data.hznu.area.signCheck,timeColName="datetime",targetColName="dayOnRatio",timeInvl=i*24*3600+j*3600)
+                                                                                  data=data.hznu.area.signCheck,timeColName="datetime",targetColName="dayOnRatio",timeInvl=-i*24*3600-j*3600)
       data.hznu.area.signCheck[,paste("d",i,"h",j,"_modiElec",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
                                                                                 FUN = getIntervalData,
-                                                                                data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",timeInvl=i*24*3600+j*3600)
+                                                                                data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",timeInvl=-i*24*3600-j*3600)
     }
   }
 }
@@ -112,6 +112,9 @@ nn<-data.hznu.area.signCheck[dayOnCount!=(onDemandCount+forenoonCount+afternoonC
 #   allDayCount=sum(allDayCount,na.rm = TRUE)),by=date],all.x=TRUE,by.x="date",by.y="date")
 # ##由于区域行为中去除掉runtime==15的数据，而此类数据认为是异常数据，在行为模式分析中已筛去，且没有对应的能耗
 
+#还是差1-2左右，影响不大
+
+
 
 #计算各模式所占比例
 data.hznu.area.signCheck<-mutate(.data =data.hznu.area.signCheck,
@@ -123,6 +126,58 @@ data.hznu.area.signCheck<-mutate(.data =data.hznu.area.signCheck,
                                  allDayRatio=allDayCount/sumDayOnLogCount)
 
 
+for(i in names(data.hznu.area.signCheck)){
+  data.hznu.area.signCheck[which(is.nan(as.matrix(data.hznu.area.signCheck[,..i]))) ,i] <- 0 
+  #很奇怪，理论来说应该是..i, 但是这里..i会提示找不到对象，直接i才行，提示是赋值时候出错
+}
+
+data.hznu.area.signCheck$modiSeason<- apply(data.hznu.area.signCheck[,"date"],MARGIN = 1,FUN = function(x){ getSeason(substr(x,6,7))}) 
+data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Transition"
+                         
+####检查各因素显著性####
+hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")
+signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday"),
+               fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
+               dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
+               stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
+               patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),
+                                    c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio"),
+                                    sep = "")))
+for(i in signAttr$patternRatio){
+  data.hznu.area.signCheck[,paste("d",1,"_",i,sep = "")]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
+                                                                FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -24*3600)
+  data.hznu.area.signCheck[,paste("d",7,"_",i,sep = "")]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
+                                                                FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -7*24*3600)
+}
+data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start = 1)
+
+####按季节归一化####
+data.hznu.area.signCheck$stdModiElec<- -9999
+for(i in unique(data.hznu.area.signCheck$modiSeason)){
+  data.hznu.area.signCheck[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
+}
+
+for(i in c("stdModiElec","dayOnRatio","fullOnRatio")){
+  for(j in unique(data.hznu.area.signCheck$modiSeason)){
+    for(k in c("weatherAttr","hst","patternRatio")){
+      if(k=="hst"){
+        fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[i]],collapse = "+")))
+      }else{
+        fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[k]],collapse = "+")))
+      }
+      fit<-glm(fmla.area.sign,
+               data=data.hznu.area.signCheck[modiSeason==j],family = binomial(),na.action = na.omit)
+      stat.fit<-summary(fit)
+      
+      if(exists("stat.hznu.area.predict.sign")){
+        stat.hznu.area.predict.sign<-rbind(stat.hznu.area.predict.sign,data.table(target=i,modiSeason=j,attr=k,var=row.names(stat.fit$coefficients),stat.fit$coefficients))
+      }else{
+        stat.hznu.area.predict.sign<-data.table(target=i,modiSeason=j,attr=k,var=row.names(stat.fit$coefficients),stat.fit$coefficients)
+      }
+    }
+  }
+}
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_Area_AttrSign.xlsx")
 
 
 data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
@@ -143,3 +198,11 @@ stat.hznu.area.completeCheck$isEnergyComplete<-(stat.hznu.area.completeCheck$ene
 nrow(stat.hznu.area.completeCheck[isUseComplete==TRUE]) #812
 nrow(stat.hznu.area.completeCheck[isEnergyComplete==TRUE]) #579
 nrow(stat.hznu.area.completeCheck[isEnergyComplete&isEnergyComplete]) #579
+
+ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime),year=as.factor(year(datetime)),monthDay=format(datetime,format="%m-%d"))),
+       aes(x=monthDay,y=modiElec,color=isWeekday,group=date,shape=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(data=(stat.hznu.area.completeCheck%>% mutate(.,date=as.Date(date))%>% mutate(.,isWeekday=isWeekday(date),year=as.factor(year(date)),monthDay=format(date,format="%m-%d"),sumCount=useCount+energyCount)),
+       aes(x=monthDay,y=sumCount,color=isWeekday,shape=year,group=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+

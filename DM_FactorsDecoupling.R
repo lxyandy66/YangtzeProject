@@ -6,7 +6,7 @@
 
 ####以能耗模式为基准合并####
 data.hznu.teaching.decoupling<-merge(
-  x=data.hznu.teaching.energy.std[,c("labelRoomDay","roomCode","date","acCount","energyClusterName")],
+  x=data.hznu.teaching.energy.std[,c("labelRoomDay","roomCode","date","acCount","energyClusterName","acIntensity")],
   y=data.hznu.teaching.thermo.final[,c("labelRoomDay","runtime","modiSeason","finalState","clusterName","thermoPattern")],
   all.x = TRUE,by.x = "labelRoomDay",by.y = "labelRoomDay")
 
@@ -28,15 +28,17 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
 
 ####统一能耗模式参数命名####
 #此处注意无需重复执行
-data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
-data.hznu.teaching.decoupling[energyClusterName=="MidTime_MidEnergy"]$energyClusterName<-"MidEnergy"
-data.hznu.teaching.decoupling[energyClusterName=="LongTime_LowEnergy"]$energyClusterName<-"LongTime_MidEnergy"
-data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"LongTime_HighEnergy"
+# unique(data.hznu.teaching.decoupling$energyClusterName)
+# data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
+# data.hznu.teaching.decoupling[energyClusterName=="MidTime_MidEnergy"]$energyClusterName<-"MidEnergy"
+# data.hznu.teaching.decoupling[energyClusterName=="LongTime_LowEnergy"]$energyClusterName<-"LongTime_MidEnergy"
+# data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"LongTime_HighEnergy"
 
 
 #用于统一树类的剪枝情况
 localInitCP<-0.01
 list.hznu.decoupling.cart<-list()
+trCtrl<-trainControl(method = )
 
 ####训练集/测试集划分####
 #分块处理
@@ -67,13 +69,20 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
     
     ####定义能耗解耦关系式####
-    decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTemp","meanOutTemp","meanRhOut","runtime")
+    decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTemp","meanOutTemp","meanRhOut","runtime","acIntensity")
     decouplingFormula<-as.formula(paste("energyClusterName ~ ",paste(decouplingAttr,collapse = "+")))
+    
     
     #CART决策树算法
     {
       algo<-"CART_Tree"
-      # decouplingFormula<-energyClusterName~clusterName+modiSeason+areaScale+runtime
+      
+      #10折交叉验证法
+      fit<-train(form=decouplingFormula,na.action = "na.omit",
+                 data=data.hznu.teaching.decoupling.selected,method = "rpart",cp=0,trControl=trainControl(method = "cv"))
+      outputImg(as.party(fit$finalModel),hit=900,wid = 1600,fileName =paste(i,j,algo,"10Fold_TreeMap.png",sep = "_"))
+      
+      #
       tree.both<-rpart(decouplingFormula,cp=localInitCP,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
@@ -107,7 +116,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     }
     
     #ID3决策树算法
-    if(TRUE){
+    if(FALSE){
       algo<-"ID3_Tree"
       tree.both<-rpart(decouplingFormula,cp=localInitCP,
                        # maxsurrogate=100,maxcompete=10,
@@ -142,7 +151,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     # C50有问题
     
     # C4.5
-    if(TRUE){
+    if(FALSE){
       algo<-"C4.5_Tree_notBinary"
       tree.both<-J48(decouplingFormula,
                        data=data.hznu.teaching.decoupling.training,control = Weka_control(u=FALSE,M=5,R=TRUE,N=10))#输出有问题, B=TRUE会报错
@@ -228,7 +237,6 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     } 
     
     ####AdaBoost####
-    #这里有问题
     if(TRUE){
       algo<-"AdaBoost"
       fit.boost<-boosting(decouplingFormula,
@@ -259,6 +267,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$confusion),
                                                      acc=1-cmResultTraining$error,setType="training"))
+      
       rm(fit.boost,cmResult,cmResultTraining)
     }
     
