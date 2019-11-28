@@ -80,3 +80,20 @@ write.xlsx(data.plfm.hznu.energy.annual,file="PLFM_HZNU_Energy_annual.xlsx")
 
 length(unique(data.plfm.hznu.thermo$buildingCode))
 length(unique(data.plfm.hznu.use$buildingCode))
+
+
+####处理住宅的数据####
+#合并坐标为主
+data.plfm.rsdt.location<-as.data.table(read.xlsx(file = "PLFM_RSDT_location.xlsx",sheetIndex = 1)) %>% mutate(.,id=1:nrow(.))
+
+set.seed(711)
+data.plfm.rsdt.window<-as.data.table(read.xlsx(file = "PLFM_RSDT_Window.xlsx",sheetIndex = 1)) %>% 
+                       mutate(.,locationID=sample(1:150,nrow(.),replace = TRUE)) %>%
+                       merge(x=.,y=data.plfm.rsdt.location,all.x=TRUE,by.x="locationID",by.y="id")
+data.plfm.rsdt.ac<-as.data.table(read.xlsx(file = "PLFM_RSDT_AC.xlsx",sheetIndex = 1))%>% 
+                   mutate(.,locationID=sample(1:150,nrow(.),replace = TRUE))%>%
+                   merge(x=.,y=data.plfm.rsdt.location,all.x=TRUE,by.x="locationID",by.y="id")
+
+write.xlsx(data.plfm.rsdt.window,file="PLFM_RSDT_Window_final.xlsx")
+write.xlsx(data.plfm.rsdt.ac,file="PLFM_RSDT_AC_final.xlsx")
+
