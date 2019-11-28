@@ -69,6 +69,12 @@ data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,
 data.hznu.area.predict.raw<-data.hznu.area.predict.raw %>%
                             mutate(.,fullOnRatio=onCount/count,dayOnRatio=onCount/dayOnCount)
 
+####增加是否是工作日的判断####
+info.hznu.holiday<-as.data.table(read.xlsx(file="HZNU_HolidayList.xlsx",sheetIndex = 1)) %>% mutate(.,date=as.character(date))
+data.hznu.area.predict.raw$isWeekday<-isWeekday(data.hznu.area.predict.raw$date)
+data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,y=info.hznu.holiday[,c("date","isBizday")],all.x = TRUE,by.x="date",by.y="date") #逻辑操作
+data.hznu.area.predict.raw[is.na(isBizday)]$isBizday<-data.hznu.area.predict.raw[is.na(isBizday)]$isWeekday
+
 ####单独取出数据集进行显著性测试####
 data.hznu.area.signCheck<-data.hznu.area.predict.raw[,c("datetime","date","fullOnRatio","dayOnRatio","modiElec","outTemp","rhOut","windSpeed","dayOnCount")]
 for(i in c(0,1,2,7)){#0天，1天，2天，7天前
@@ -199,8 +205,13 @@ nrow(stat.hznu.area.completeCheck[isUseComplete==TRUE]) #812
 nrow(stat.hznu.area.completeCheck[isEnergyComplete==TRUE]) #579
 nrow(stat.hznu.area.completeCheck[isEnergyComplete&isEnergyComplete]) #579
 
-ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime),year=as.factor(year(datetime)),monthDay=format(datetime,format="%m-%d"))),
-       aes(x=monthDay,y=modiElec,color=isWeekday,group=date,shape=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime),year=as.factor(year(datetime)),
+                                                  monthDay=format(datetime,format="%m-%d")) %>% .[substr(datetime,1,7) %in% c("2017-05","2017-06","2017-07","2017-08","2017-09","2017-10")]),
+       aes(x=date,y=fullOnRatio,color=isBizday,group=date,shape=year))+geom_line()+geom_point()+theme(axis.text.x = element_text(angle = 90, hjust = 1))#+facet_wrap(~year,ncol=1)
+# c("2018-11","2018-12","2019-01","2019-02")]#这一截不行
+
 
 ggplot(data=(stat.hznu.area.completeCheck%>% mutate(.,date=as.Date(date))%>% mutate(.,isWeekday=isWeekday(date),year=as.factor(year(date)),monthDay=format(date,format="%m-%d"),sumCount=useCount+energyCount)),
        aes(x=monthDay,y=sumCount,color=isWeekday,shape=year,group=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))

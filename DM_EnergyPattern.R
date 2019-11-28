@@ -308,6 +308,8 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
   geom_point(alpha=0.3,position = "jitter")+ylim(c(0,100))+#xlim(c(0,5))+#stat_density_2d(aes(fill=..level..,color=energyClusterName),geom="polygon")+
   theme_bw()
 
+data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,c("finalState","energyClusterName")],MARGIN = 1,
+                                                 FUN = function(x){ return(stat.hznu.energy.tryCluster.descr[paste==paste(x[2],x[1],sep = "_")]$runtime)})
 ggplot(data=data.hznu.teaching.energy.std,
-       aes(x=energyClusterName,y=sumElec))+
-  geom_boxplot()+facet_wrap(~finalState)+theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+       aes(x=meanRuntime,y=sumElec,color=energyClusterName))+
+  geom_boxplot(width=1)+facet_wrap(~finalState)+theme_bw()#+ theme(axis.text.x = element_text(angle = 45, hjust = 1))

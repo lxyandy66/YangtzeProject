@@ -27,18 +27,19 @@ ggplot(data=data.hznu.teaching.decoupling,aes(x=setTemp))+geom_density()
 data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"acCount"],MARGIN = 1, FUN = getAreaLevel)
 
 ####统一能耗模式参数命名####
-#此处注意无需重复执行
-# unique(data.hznu.teaching.decoupling$energyClusterName)
-# data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
-# data.hznu.teaching.decoupling[energyClusterName=="MidTime_MidEnergy"]$energyClusterName<-"MidEnergy"
-# data.hznu.teaching.decoupling[energyClusterName=="LongTime_LowEnergy"]$energyClusterName<-"LongTime_MidEnergy"
-# data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"LongTime_HighEnergy"
+此处注意无需重复执行
+unique(data.hznu.teaching.decoupling$energyClusterName)
+data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
+data.hznu.teaching.decoupling[energyClusterName=="MidEnergy"]$energyClusterName<-"MidEnergy_MidTime"
+data.hznu.teaching.decoupling[energyClusterName=="LongTime_MidEnergy"]$energyClusterName<-"MidEnergy_LongTime"
+data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"HighEnergy"
 
 
 #用于统一树类的剪枝情况
 localInitCP<-0.01
 list.hznu.decoupling.cart<-list()
 
+j<-unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)[6]
 ####训练集/测试集划分####
 #分块处理
 for(i in unique(data.hznu.teaching.decoupling$finalState) ){
@@ -78,35 +79,37 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     }
     
     #CART决策树算法
-    if(FALSE){
+    if(TRUE){
       algo<-"CART_Tree"
       
       #10折交叉验证法
       #train方法无法对仅有一个级别的变量进行训练
-      fit<-train(form=tenFoldFormula,na.action = "na.omit",
-                 data=data.hznu.teaching.decoupling.selected,method = "rpart",tuneGrid=expand.grid(cp=seq(from= localInitCP,to=0.2,by=0.005)),
-                 trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))
+      # fit<-train(form=tenFoldFormula,na.action = "na.omit",
+      #            data=data.hznu.teaching.decoupling.selected,method = "rpart",#tuneGrid=expand.grid(cp=seq(from= localInitCP,to=0.2,by=0.005)),
+      #            trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))
       # plot(as.party(fit$finalModel))
-      list.hznu.decoupling.cart[[i]][[j]][["10Fold"]]<-fit$finalModel
-      outputImg(as.party(fit$finalModel),hit=900,wid = 1600,fileName =paste(i,j,algo,"10Fold_TreeMap.png",sep = "_"))
-      cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
-      outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
-                      algoName = algo,tree = fit$finalModel , fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
-                      other = list(paste("Total node: ",length(as.party(fit$finalModel))),fit$finalModel$variable.importance))
-      rm(fit,cmResult)
+      # list.hznu.decoupling.cart[[i]][[j]][["10Fold"]]<-fit$finalModel
+      # outputImg(as.party(fit$finalModel),hit=900,wid = 1600,fileName =paste(i,j,algo,"10Fold_TreeMap.png",sep = "_"))
+      # cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
+      # outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
+      #                 algoName = algo,tree = fit$finalModel , fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
+      #                 other = list(paste("Total node: ",length(as.party(fit$finalModel))),fit$finalModel$variable.importance))
+      # rm(fit,cmResult)
       
       #hold-out验证法
-      tree.both<-rpart(decouplingFormula,cp=localInitCP,#localInitCP,
+      tree.both<-rpart(decouplingFormula,cp=0.02,minbucket=20,#localInitCP,
                      # maxsurrogate=100,maxcompete=10,
                      data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
-      tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party"
+      plot(rpartTrue2)
       # par(mfrow=c(1,1))
-      # prp(tree.both,type=5,extra = 8,varlen=0,faclen=0)
+      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05)
+     
+      
       list.hznu.decoupling.cart[[i]][[j]][["holdOut"]]<-tree.both
-      rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
-      # plot(rpartTrue2)
       #测试集验证
       cmResult<-
         predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
@@ -226,19 +229,19 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     
     # #随机森林
     
-    if(FALSE){
+    if(TRUE){
      
       algo<-"RandomForest"
       #10-fold验证
       fit<-train(form=tenFoldFormula,na.action = "na.omit",
-                 data=data.hznu.teaching.decoupling.selected,method = "rf",tuneGrid=data.frame(mtry=2:5),
-                 trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))#ntree调不了
+                 data=data.hznu.teaching.decoupling.selected,method = "rf",tuneGrid=data.frame(mtry=2:5),importance=TRUE,ntree=1000,
+                 trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))#ntree能传进不知道能不能调
       cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
                       algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
-                      other = list("nTree = 500",importance(fit$finalModel,type = 1),importance(fit$finalModel,type = 2)))
+                      other = list("nTree = 1000",importance(fit$finalModel,type = 1),importance(fit$finalModel,type = 2)))
       rm(fit,cmResult)
       
       
@@ -270,9 +273,9 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
     if(TRUE){
       algo<-"AdaBoost"
       
-      #10Fold
+      #10Fold #迭代次数大于10时就会报错
       fit<-train(form=tenFoldFormula,
-                 data=data.hznu.teaching.decoupling.selected,method = "AdaBoost.M1",tuneGrid=data.frame(mfinal=100,maxdepth = 30,coeflearn = 'Breiman'),
+                 data=data.hznu.teaching.decoupling.selected,method = "AdaBoost.M1",
                  na.action = "na.omit",
                  trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))
       cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
@@ -281,17 +284,12 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
                       algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
                       other = list("nIter = 200",fit$finalModel$importance))
-      outputImg(FUN = function(x){
-        plot(x$error,type="o",pch=17,ann=FALSE)
-        title(xlab = "Iteration times",ylab = "Error")
-      },plottable = errorevol(fit$finalModel,data.hznu.teaching.decoupling.selected),
-      hit=480,wid = 640,fileName = paste(i,j,algo,"10Fold_Err.png",sep = "_"))
       rm(fit,cmResult)
       
       #hold-out 验证法
       fit.boost<-boosting(decouplingFormula,
                           data=data.hznu.teaching.decoupling.training,
-                          mfinal = 100,cp=localInitCP)
+                          mfinal = 200,cp=localInitCP)
       #检查误差演变
       outputImg(FUN = function(x){
         plot(x$error,type="o",pch=17,ann=FALSE)
