@@ -14,32 +14,68 @@ write.xlsx(data.cplx.annual,file = "CPLX_AnnualData.xlsx")
 
 ####HZNU温度数据####
 #日数据
+#加载HZNU的坐标数据
+info.hznu.teaching.position<-read.csv(file = "HZNU_教学建筑编码及坐标对应表.csv",encoding = "UTF-8")
 data.plfm.hznu.thermo.daily<-data.hznu.teaching.thermo.final[,c("date","roomCode",sprintf("modH%02d",8:22))] %>%
-                       mutate(.,buildingCode=substr(roomCode,1,10),labelBuildingDay=paste(buildingCode,date,sep="_"),
-                              meanDailyTemp=apply(.[,c(sprintf("modH%02d",8:22))], MARGIN = 1, FUN = mean,na.rm=TRUE)) %>%
-                       .[,.(date=date[1],
-                            buildingCode=buildingCode[1],
-                            count=length(roomCode),
-                            meanTemp=mean(meanDailyTemp,na.rm=TRUE),
-                            timeType="0"),by=labelBuildingDay]#日数据为0
-data.plfm.hznu.use.daily<-data.hznu.building.use[,c("date","hour","buildingCode","count","onCount","acCount","acUsedCount")] %>% 
-                    mutate(.,labelBuildingDay=paste(buildingCode,date,sep = "_")) %>%
-                    .[,.(date=date[1],
-                         buildingCode=buildingCode[1],
-                         runtime=length(hour[onCount!=0]),
-                         acCount=sum(acCount,na.rm = TRUE),
-                         acUsedCount=sum(acUsedCount,na.rm = TRUE)
-                         ),by=labelBuildingDay] %>% 
-                    mutate(.,acUsedIntensity=acUsedCount/acCount,timeType="0")#日数据为0
+                             mutate(.,buildingCode=substr(roomCode,1,10),labelBuildingDay=paste(buildingCode,date,sep="_"),
+                                    meanDailyTemp=apply(.[,c(sprintf("modH%02d",8:22))], MARGIN = 1, FUN = mean,na.rm=TRUE)) %>%
+                             .[,.(date=date[1],
+                                  buildingCode=buildingCode[1],
+                                  count=length(roomCode),
+                                  meanTemp=mean(meanDailyTemp,na.rm=TRUE),
+                                  timeType="0"),by=labelBuildingDay] %>%#日数据为0
+                              merge(x=.,y=info.hznu.teaching.position[,c("buildingName","buildingCode","lat","lng")],
+                                    all.x=TRUE,by.x="buildingCode",by.y="buildingCode")
+data.plfm.hznu.use.daily<-data.hznu.building.use[buildingCode %in% unique(data.plfm.hznu.thermo.daily$buildingCode),
+                                                 c("date","hour","buildingCode","count","onCount","acCount","acUsedCount")] %>% 
+                          mutate(.,labelBuildingDay=paste(buildingCode,date,sep = "_")) %>%
+                          .[,.(date=date[1],
+                               buildingCode=buildingCode[1],
+                               runtime=length(hour[onCount!=0]),
+                               acCount=sum(acCount,na.rm = TRUE),
+                               acUsedCount=sum(acUsedCount,na.rm = TRUE)
+                               ),by=labelBuildingDay] %>% 
+                          mutate(.,acUsedIntensity=acUsedCount/acCount,timeType="0")%>%#日数据为0
+                          merge(x=.,y=info.hznu.teaching.position[,c("buildingName","buildingCode","lat","lng")],
+                                all.x=TRUE,by.x="buildingCode",by.y="buildingCode")
 data.plfm.hznu.energy.daily<-data.hznu.building.energy %>% mutate(.,labelBuildingDay=paste(buildingCode,date,sep = "_")) %>%
                              .[,.(date=date[1],
                                   buildingCode=buildingCode[1],
                                   timeType="0",
                                   modiElec=sum(modiElec,na.rm = TRUE)
-                                  ),by=labelBuildingDay]
+                                  ),by=labelBuildingDay]%>%#日数据为0
+                              merge(x=.,y=info.hznu.teaching.position[,c("buildingName","buildingCode","lat","lng")],
+                                    all.x=TRUE,by.x="buildingCode",by.y="buildingCode")
 write.xlsx(data.plfm.hznu.thermo.daily,file="PLFM_HZNU_Thermo_daily.xlsx")
 write.xlsx(data.plfm.hznu.use.daily,file="PLFM_HZNU_Use_daily.xlsx")
 write.xlsx(data.plfm.hznu.energy.daily,file="PLFM_HZNU_Energy_daily.xlsx")
+
+#能耗的年、月数据处理
+data.plfm.hznu.energy.monthly<-data.plfm.hznu.energy.daily %>% 
+                               mutate(.,labelBuildingMonth=substr(labelBuildingDay,1,18),date=paste(substr(date,1,8),"01",sep = "")) %>%
+                               .[,.(date=date[1],
+                                    buildingCode=buildingCode[1],
+                                    buildingName=buildingName[1],
+                                    lat=lat[1],
+                                    lng=lng[1],
+                                    timeType="1",
+                                    modiElec=sum(modiElec,na.rm = TRUE)
+                                    ),by=labelBuildingMonth]
+data.plfm.hznu.energy.annual<-data.plfm.hznu.energy.monthly %>% 
+                              mutate(.,labelBuildingYear=substr(labelBuildingMonth,1,15),date=paste(substr(date,1,5),"01-01",sep = "")) %>%
+                              .[,.(date=date[1],
+                                   buildingCode=buildingCode[1],
+                                   buildingName=buildingName[1],
+                                   lat=lat[1],
+                                   lng=lng[1],
+                                   timeType="2",
+                                   modiElec=sum(modiElec,na.rm = TRUE)
+                              ),by=labelBuildingYear]
+
+
+write.xlsx(data.plfm.hznu.energy.monthly,file="PLFM_HZNU_Energy_monthly.xlsx")
+write.xlsx(data.plfm.hznu.energy.annual,file="PLFM_HZNU_Energy_annual.xlsx")
+
 
 
 length(unique(data.plfm.hznu.thermo$buildingCode))
