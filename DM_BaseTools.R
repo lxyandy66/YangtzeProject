@@ -366,4 +366,35 @@ getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl){
   return(as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#data[.(targetTime),on= ..timeColName][..targetColName]#理论是可以的，但是on的传参传不进去
 }
 
+#注意timeInvl是正值
+getPreviousCataData<-function(thisTime,data,timeColName,targetColName,flagColName,timeInvl,expFlag){
+  data<-as.data.table(data)
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  if(! (targetTime %in% as.POSIXct(as.vector(as.matrix(data[,..timeColName]))))) ##这个数据框降级变成向量的操作真是不友好
+      return(NA)#目标时间不在数据表中，表明已经越界
+  targetFlag<-as.logical(data[.(targetTime),on=c(timeColName)][1,..flagColName])
+  if(targetFlag==expFlag){
+    return(as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#如果目标时间的标志位符合，则命中返回。
+  }else{
+    getPreviousDate(thisTime=as.POSIXct(targetTime),data,timeColName,targetColName,flagColName,timeInvl,expFlag)
+  }
+}
 
+getTargetDate<-function(thisTime,data,timeColName,flagColName=NA,expFlag=NA,timeInvl){
+  if( xor(is.na(flagColName),is.na(expFlag)) )
+    stop("flagColName and expFlag must co-exist")
+  data<-as.data.table(data)
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  if(! (targetTime %in% as.POSIXct(as.vector(as.matrix(data[,..timeColName]))))) ##这个数据框降级变成向量的操作真是不友好
+    return(NA)#目标时间不在数据表中，表明已经越界
+  
+  if(!is.na(flagColName))
+    return(targetTime)#如果标志列为空，则说明无需参考标志，直接返回targetTime
+  
+  targetFlag<-as.logical(data[.(targetTime),on=c(timeColName)][1,..flagColName])
+  if(targetFlag==expFlag){
+    return(targetTime)#如果目标时间的标志位符合，则命中返回。
+  }else{
+    getPreviousDate(thisTime=as.POSIXct(targetTime),data,timeColName,targetColName,flagColName,timeInvl,expFlag)
+  }
+}

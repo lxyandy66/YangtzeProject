@@ -75,17 +75,26 @@ data.hznu.area.predict.raw$isWeekday<-isWeekday(data.hznu.area.predict.raw$date)
 data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,y=info.hznu.holiday[,c("date","isBizday")],all.x = TRUE,by.x="date",by.y="date") #逻辑操作
 data.hznu.area.predict.raw[is.na(isBizday)]$isBizday<-data.hznu.area.predict.raw[is.na(isBizday)]$isWeekday
 
+
 ####单独取出数据集进行显著性测试####
-data.hznu.area.signCheck<-data.hznu.area.predict.raw[,c("datetime","date","fullOnRatio","dayOnRatio","modiElec","outTemp","rhOut","windSpeed","dayOnCount")]
+data.hznu.area.signCheck<-data.hznu.area.predict.raw[,c("datetime","date","fullOnRatio","modiElec","outTemp","rhOut","windSpeed","dayOnCount","isBizday")]
+data.hznu.area.signCheck$r1h0_FullOnRatio<-apply(X = data.hznu.area.signCheck[,c("datetime","isBizday")],MARGIN = 1,
+                                                 FUN = function(x){
+                                                   getPreviousDate(thisTime = x[1],expFlag = as.logical(gsub(" ","",x[2])),
+                                                                   data=data.hznu.area.signCheck,timeColName="datetime",targetColName="fullOnRatio",flagColName="isBizday",timeInvl= -24*3600)})
+data.hznu.area.signCheck$r1h0_modiElec<-apply(X = data.hznu.area.signCheck[,c("datetime","isBizday")],MARGIN = 1,
+                                                 FUN = function(x){
+                                                   getPreviousDate(thisTime = x[1],expFlag = as.logical(gsub(" ","",x[2])),
+                                                                   data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",flagColName="isBizday",timeInvl= -24*3600)})
 for(i in c(0,1,2,7)){#0天，1天，2天，7天前
   for(j in c(0,1,2)){#
     if(!(i==0&j==0)){#i,j即天和小时不同时为0
       data.hznu.area.signCheck[,paste("d",i,"h",j,"_FullOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
                                                                                    FUN = getIntervalData,
                                                                                    data=data.hznu.area.signCheck,timeColName="datetime",targetColName="fullOnRatio",timeInvl=-i*24*3600-j*3600)
-      data.hznu.area.signCheck[,paste("d",i,"h",j,"_DayOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
-                                                                                  FUN = getIntervalData,
-                                                                                  data=data.hznu.area.signCheck,timeColName="datetime",targetColName="dayOnRatio",timeInvl=-i*24*3600-j*3600)
+      # data.hznu.area.signCheck[,paste("d",i,"h",j,"_DayOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
+      #                                                                             FUN = getIntervalData,
+      #                                                                             data=data.hznu.area.signCheck,timeColName="datetime",targetColName="dayOnRatio",timeInvl=-i*24*3600-j*3600)
       data.hznu.area.signCheck[,paste("d",i,"h",j,"_modiElec",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
                                                                                 FUN = getIntervalData,
                                                                                 data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",timeInvl=-i*24*3600-j*3600)
