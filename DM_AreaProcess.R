@@ -102,7 +102,6 @@ for(i in c(0,1,2,7)){#0天，1天，2天，7天前
   }
 }
 
-
 ####统计各使用模式日内占比####
 data.hznu.area.signCheck<-data.hznu.use.predict.building.raw[,.(
                                       sumDayOnLogCount=sum(onCount,na.rm = TRUE),
@@ -113,6 +112,8 @@ data.hznu.area.signCheck<-data.hznu.use.predict.building.raw[,.(
                                       lateDaytimeCount=sum(lateDaytimeCount,na.rm = TRUE),
                                       allDayCount=sum(allDayCount,na.rm = TRUE)),by=date] %>%
                           merge(x=data.hznu.area.signCheck,y=.,all.x=TRUE,by.x="date",by.y="date")
+
+data.hznu.area.signCheck<-as.data.table(data.hznu.area.signCheck)#突然变成data.frame？？？
 # 计算一下统计正确性
 nn<-data.hznu.area.signCheck[dayOnCount!=(onDemandCount+forenoonCount+afternoonCount+daytimeCount+lateDaytimeCount+allDayCount)]#这样可以，但是不能用dayOnCount
 # #解决一下dayOnCount的错误
@@ -142,7 +143,7 @@ data.hznu.area.signCheck<-mutate(.data =data.hznu.area.signCheck,
 
 
 for(i in names(data.hznu.area.signCheck)){
-  data.hznu.area.signCheck[which(is.nan(as.matrix(data.hznu.area.signCheck[,..i]))) ,i] <- 0 
+  data.hznu.area.signCheck[which(is.nan(as.matrix(data.hznu.area.signCheck[,..i]))) ,i] <- NA
   #很奇怪，理论来说应该是..i, 但是这里..i会提示找不到对象，直接i才行，提示是赋值时候出错
 }
 
@@ -150,30 +151,58 @@ data.hznu.area.signCheck$modiSeason<- apply(data.hznu.area.signCheck[,"date"],MA
 data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Transition"
                          
 ####检查各因素显著性####
-hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")
-signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday"),
+hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")#"r1h0",
+patternRatioName<-c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio")
+signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday"),#
                fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
-               dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
+               # dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
                stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
-               patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),
-                                    c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio"),
-                                    sep = "")))
+               patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),patternRatioName,sep = "")))#rep("r1_",6),
+
 for(i in signAttr$patternRatio){
-  data.hznu.area.signCheck[,paste("d",1,"_",i,sep = "")]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
+  data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -24*3600)
-  data.hznu.area.signCheck[,paste("d",7,"_",i,sep = "")]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
+  data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -7*24*3600)
+}#这一段算法不好，太慢了，肯定不能直接按对象来，直接按天来会好得多
+#我是个傻*吗...这个明显不对的东西
+data.hznu.area.signCheck[,c(paste(signAttr$patternRatio,"_org",sep = ""))]<-NULL
+
+
+for(i in unique(data.hznu.area.signCheck$date)){
+  #取前一个参考天
+  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
+                                       timeColName = "date",flagColName = "isBizday",
+                                       expFlag = data.hznu.area.signCheck[date==i]$isBizday[1],timeInvl = -24*3600))
+  # cat("thisTime: ",i,"\tTargetTime: ",,"\n")
+  data.hznu.area.signCheck[date==i,c(paste(rep("r1_",6),patternRatioName,sep = ""))]<-
+    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  
+  #取前一天
+  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
+                                       timeColName = "date",timeInvl = -24*3600))
+  data.hznu.area.signCheck[date==i,c(paste(rep("d1_",6),patternRatioName,sep = ""))]<-
+    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  #取前七天
+  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
+                                       timeColName = "date",timeInvl = -7*24*3600))
+  data.hznu.area.signCheck[date==i,c(paste(rep("d7_",6),patternRatioName,sep = ""))]<-
+    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
 }
+
+nn<-data.hznu.area.signCheck[,c("date","isBizday","onDemandRatio","d1_onDemandRatio","d1_onDemandRatio_org")]
+
 data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start = 1)
 
 ####按季节归一化####
-data.hznu.area.signCheck$stdModiElec<- -9999
-for(i in unique(data.hznu.area.signCheck$modiSeason)){
-  data.hznu.area.signCheck[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
+data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
+data.hznu.area.signCheck.pickup$stdModiElec<- -9999
+for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
+  data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
-
-for(i in c("stdModiElec","dayOnRatio","fullOnRatio")){
-  for(j in unique(data.hznu.area.signCheck$modiSeason)){
+rm(stat.hznu.area.predict.sign)
+for(i in c("stdModiElec","fullOnRatio")){
+  for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
     for(k in c("weatherAttr","hst","patternRatio")){
       if(k=="hst"){
         fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[i]],collapse = "+")))
@@ -181,7 +210,7 @@ for(i in c("stdModiElec","dayOnRatio","fullOnRatio")){
         fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[k]],collapse = "+")))
       }
       fit<-glm(fmla.area.sign,
-               data=data.hznu.area.signCheck[modiSeason==j],family = binomial(),na.action = na.omit)
+               data=data.hznu.area.signCheck.pickup[modiSeason==j],family = binomial(),na.action = na.omit)
       stat.fit<-summary(fit)
       
       if(exists("stat.hznu.area.predict.sign")){
@@ -192,7 +221,7 @@ for(i in c("stdModiElec","dayOnRatio","fullOnRatio")){
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_Area_AttrSign.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_AttrSign_origin.xlsx")
 
 
 data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 

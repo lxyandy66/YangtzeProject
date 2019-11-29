@@ -381,20 +381,22 @@ getPreviousCataData<-function(thisTime,data,timeColName,targetColName,flagColNam
 }
 
 getTargetDate<-function(thisTime,data,timeColName,flagColName=NA,expFlag=NA,timeInvl){
-  if( xor(is.na(flagColName),is.na(expFlag)) )
+  if( xor(is.na(flagColName),is.na(expFlag)) )#flagColName和expFlag必须同时存在或同时不存在
     stop("flagColName and expFlag must co-exist")
   data<-as.data.table(data)
+  thisTime<-as.POSIXct(thisTime)
   targetTime<-as.POSIXct(thisTime)+timeInvl
+  
   if(! (targetTime %in% as.POSIXct(as.vector(as.matrix(data[,..timeColName]))))) ##这个数据框降级变成向量的操作真是不友好
     return(NA)#目标时间不在数据表中，表明已经越界
   
-  if(!is.na(flagColName))
+  if(is.na(flagColName)|is.na(expFlag))
     return(targetTime)#如果标志列为空，则说明无需参考标志，直接返回targetTime
   
-  targetFlag<-as.logical(data[.(targetTime),on=c(timeColName)][1,..flagColName])
+  targetFlag<-as.logical(data[.(format(targetTime)),on=c(timeColName)][1,..flagColName])###注意这个format，可能存在格式不同
   if(targetFlag==expFlag){
     return(targetTime)#如果目标时间的标志位符合，则命中返回。
   }else{
-    getPreviousDate(thisTime=as.POSIXct(targetTime),data,timeColName,targetColName,flagColName,timeInvl,expFlag)
+    getTargetDate(thisTime=as.POSIXct(targetTime),data = data,timeColName=timeColName,flagColName=flagColName,timeInvl=timeInvl,expFlag=expFlag)
   }
 }
