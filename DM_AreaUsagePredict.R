@@ -36,8 +36,8 @@ data.hznu.area.predict.use$tsFullOnRatio<-as.numeric(fit.ts.hznu.usage$fitted)
 data.hznu.area.predict.use[tsFullOnRatio<0]$tsFullOnRatio<-0
 #计算纯时间序列的相对误差
 data.hznu.area.predict.use$rlatTsErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$tsFullOnRatio)/data.hznu.area.predict.use$fullOnRatio)
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$tsFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)
-RMSE(pred = data.hznu.area.predict.use$tsFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#RMSE大概0.022
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$tsFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.5800756
+RMSE(pred = data.hznu.area.predict.use$tsFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.022
 boxplot.stats(data.hznu.area.predict.use$rlatTsErr)#4.578777e-05 1.217521e-01 3.031872e-01 8.384903e-01 1.903394e+00
 mean(data.hznu.area.predict.use[!is.infinite(rlatTsErr)]$rlatTsErr,na.rm = TRUE)#0.5800756
 getRSquare(pred = data.hznu.area.predict.use$tsFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8631175
@@ -91,14 +91,9 @@ getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$simpleKnnFullOnRatio,
 data.hznu.area.predict.use$rlatSimpleKnnErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$simpleKnnFullOnRatio)/data.hznu.area.predict.use$fullOnRatio)
 RMSE(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.0359
 boxplot.stats(data.hznu.area.predict.use$rlatSimpleKnnErr)#6.381677e-05 2.090334e-01 4.396562e-01 7.437810e-01 1.543582e+00
-mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr,na.rm = TRUE)#0.552
+mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr,na.rm = TRUE)#0.942
 getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.485979
 
-
-ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[substr(datetime,1,7)=="2017-12",c("datetime","fullOnRatio","tsFullOnRatio","knnFullOnRatio","simpleKnnFullOnRatio")] %>% 
-         mutate(.,year=substr(datetime,1,4))%>% melt(.,id.var=c("datetime","year")),
-       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)
 
 
 ####SVM进行预测####
@@ -146,7 +141,7 @@ data.hznu.area.predict.use$svmIterPred<- -999
 
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   for(j in 1:10){
-    seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]],"knnFullOnRatio","h1_stdErrKnn","h1_stdErrSvm")
+    seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]],"knnFullOnRatio","h1_stdErrKnn","svmInitPred","h1_stdErrSvm")
     fit.svm<-ksvm(x=as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
@@ -156,11 +151,25 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
 }
 data.hznu.area.predict.use[svmIterPred== -999]$svmIterPred<-NA
 
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmIterPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.295139
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmIterPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.2593337
 data.hznu.area.predict.use$rlatSvmIterErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$svmIterPred)/data.hznu.area.predict.use$fullOnRatio)
-RMSE(pred = data.hznu.area.predict.use$svmIterPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01651134
-boxplot.stats(data.hznu.area.predict.use$rlatSvmIterErr)#9.918532e-05 6.631196e-02 1.568308e-01 3.516293e-01 7.795555e-01
-mean(data.hznu.area.predict.use[!is.infinite(rlatSvmIterErr)]$rlatSvmIterErr,na.rm = TRUE)# 0.295139
-getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9267991
+RMSE(pred = data.hznu.area.predict.use$svmIterPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01464064
+boxplot.stats(data.hznu.area.predict.use$rlatSvmIterErr)#6.729713e-05 5.901312e-02 1.363222e-01 3.212818e-01 7.135150e-01
+mean(data.hznu.area.predict.use[!is.infinite(rlatSvmIterErr)]$rlatSvmIterErr,na.rm = TRUE)# 0.2593337
+getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9431014
+
+无svmInitPred参考
+# MAPE 0.295139
+# RMSE 0.01651134
+# BoxRlat 9.918532e-05 6.631196e-02 1.568308e-01 3.516293e-01 7.795555e-01
+# meanRlat 0.295139
+# R^2 0.9267991
 
 
+#
+ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
+ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio")] %>% 
+         mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","year","date")),
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)+
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),
+        legend.text = element_text(size=14),legend.position = c(0.15,0.88))
