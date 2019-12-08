@@ -432,5 +432,16 @@ data.weather.airport.monthly<- data.weather.airport.daily %>%
                                     maxOutTemp=max(meanOutTemp,na.rm = TRUE),
                                     minOutTemp=min(meanOutTemp,na.rm = TRUE),
                                     meanOutRh=mean(meanRhOut[meanRhOut<=1&meanRhOut>0],na.rm = TRUE)),by=month]
+#按月旬平均
+# nn<-
+data.weather.airport.monthPeriod<- cbind(data.weather.airport.daily,
+                                         monthPeriod=apply(X = data.weather.airport.daily[,"date"],MARGIN = 1,
+                                                           FUN = function(x){
+                                                             return(getMonthPeriod(as.numeric(substr(x,9,10))))
+                                                           })) %>%
+                                   .[,.(meanOutTemp=mean(meanOutTemp,na.rm = TRUE),
+                                        maxOutTemp=max(meanOutTemp,na.rm = TRUE),
+                                        minOutTemp=min(meanOutTemp,na.rm = TRUE)),by=monthPeriod]
+
 
 
