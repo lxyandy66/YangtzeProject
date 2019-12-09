@@ -311,5 +311,9 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
 data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,c("finalState","energyClusterName")],MARGIN = 1,
                                                  FUN = function(x){ return(stat.hznu.energy.tryCluster.descr[paste==paste(x[2],x[1],sep = "_")]$runtime)})
 ggplot(data=data.hznu.teaching.energy.std,
-       aes(x=meanRuntime,y=sumElec,color=energyClusterName))+
-  geom_boxplot(width=1)+facet_wrap(~finalState)+theme_bw()#+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+       aes(x=energyClusterName,y=sumUiElec,color=energyClusterName))+
+  geom_boxplot()+facet_wrap(~finalState)+theme_bw()#+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data=data.hznu.teaching.energy.std,aes(x=sumElec))+geom_density()+facet_wrap(~energyClusterName+finalState,nrow = 4)+
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
+        legend.text = element_text(size=14),legend.position = c(0.1,0.9))

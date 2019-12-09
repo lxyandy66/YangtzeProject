@@ -12,7 +12,7 @@ data.hznu.energy.decoupling$clusterName<-as.factor(data.hznu.energy.decoupling$c
 
 
 
-modiSelect<-"heating"
+modiSelect<-"cooling"
 {
   # 训练集测试集划分
   data.hznu.energy.decoupling.select<-data.hznu.energy.decoupling[finalState==modiSelect]
@@ -33,8 +33,9 @@ modiSelect<-"heating"
               predictableModel = tree.energy.decoupling.party,isOutput = FALSE,fileName = paste("HZNU",modiSelect,"CART_Evaluation_seed=95.txt",sep = "_"))
   
   #随机森林
-  fit.forest.energy.decoupling<-randomForest(energyClusterName~clusterName+modiSeason+acIntensity+areaScale+runtime,cp=0,
+  fit.forest.energy.decoupling<-randomForest(energyClusterName~clusterName+modiSeason+acIntensity+areaScale+runtime,cp=0,importance=TRUE,
                                              data=data.hznu.energy.decoupling.select.training,ntree=1000)
+  importance(fit.forest.energy.decoupling)
   predictTest(testSet = data.hznu.energy.decoupling.select.test,resultValue = data.hznu.energy.decoupling.select.test$energyClusterName,
               predictableModel = fit.forest.energy.decoupling,isOutput = T,fileName = paste("HZNU",modiSelect,"RF_Evaluation_seed=19950711.txt",sep = "_"))
   

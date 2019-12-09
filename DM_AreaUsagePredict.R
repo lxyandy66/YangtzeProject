@@ -171,5 +171,4 @@ ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0
 ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio")] %>% 
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","year","date")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)+
-  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),
-        legend.text = element_text(size=14),legend.position = c(0.15,0.88))
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.88))

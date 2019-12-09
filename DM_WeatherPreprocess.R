@@ -441,7 +441,7 @@ data.weather.airport.monthPeriod<- cbind(data.weather.airport.daily,
                                                            })) %>%
                                    .[,.(meanOutTemp=mean(meanOutTemp,na.rm = TRUE),
                                         maxOutTemp=max(meanOutTemp,na.rm = TRUE),
-                                        minOutTemp=min(meanOutTemp,na.rm = TRUE)),by=monthPeriod]
+                                        minOutTemp=min(meanOutTemp,na.rm = TRUE)),by=paste(substr(date,6,7),monthPeriod,sep = "_")]
 
 
 
