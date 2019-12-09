@@ -34,3 +34,20 @@ stat.hznu.roomAc$buildingCode<-substr(stat.hznu.roomAc$roomCode,1,10)
 stat.hznu.roomAc<-merge(x=stat.hznu.roomAc,y=data.mapping.buildingType[,c("buildingCode","type")],
                         by.x = "buildingCode",by.y="buildingCode",all.x = TRUE)
 write.xlsx(x = stat.hznu.roomAc,file="HZNU_AcStat.xlsx")
+
+####HZNU建筑面积调研列表####
+stat.hznu.roomAc<-merge(x=stat.hznu.roomAc,
+                        y=info.hznu.teaching.position[,c("buildingName","buildingCode")],
+                        all.x = TRUE,by.x = "buildingCode",by.y="buildingCode")
+stat.hznu.roomAc.teaching<-stat.hznu.roomAc[type=="teaching"] %>% 
+                           mutate(.,NA.=NULL,roomCode=as.character(roomCode)) %>% as.data.table(.)
+stat.hznu.roomAc.teaching$roomNo<-apply(X = stat.hznu.roomAc.teaching[,"roomCode"],MARGIN = 1,
+                                        FUN = function(x){
+                                          return(substr(x,nchar(x)-2,nchar(x)))
+                                        })
+
+
+
+
+
+
