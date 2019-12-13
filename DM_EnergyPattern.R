@@ -299,6 +299,18 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
 
 write.xlsx(x=stat.hznu.energy.tryCluster.descr,file = "HZNU___.xlsx")
 
+
+data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,c("finalState","energyClusterName")],MARGIN = 1,
+                                                 FUN = function(x){ return(stat.hznu.energy.tryCluster.descr[paste==paste(x[2],x[1],sep = "_")]$runtime)})
+
+#合并房间面积数据，计算EUI
+# data.hznu.teaching.energy.std[,c("area","modiArea","seatCount","modiSeat")]<-NULL
+data.hznu.teaching.energy.std<-merge(x=data.hznu.teaching.energy.std,y=info.hznu.teaching.room[,c("roomCode","area","modiArea","seatCount","modiSeat")],
+                                     by.x="roomCode",by.y="roomCode",all.x = TRUE)
+data.hznu.teaching.energy.std$areaEUI<-data.hznu.teaching.energy.std$sumElec/data.hznu.teaching.energy.std$modiArea
+
+
+
 ggplot(data=stat.hznu.energy.tryCluster.descr,
        aes(x=runtime,y=sumElec,size=sdElec,color=energyClusterName))+
   geom_point()+facet_wrap(~finalState)+theme_bw()#+scale_size_area(range=c(0,50))
@@ -308,12 +320,15 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
   geom_point(alpha=0.3,position = "jitter")+ylim(c(0,100))+#xlim(c(0,5))+#stat_density_2d(aes(fill=..level..,color=energyClusterName),geom="polygon")+
   theme_bw()
 
-data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,c("finalState","energyClusterName")],MARGIN = 1,
-                                                 FUN = function(x){ return(stat.hznu.energy.tryCluster.descr[paste==paste(x[2],x[1],sep = "_")]$runtime)})
-ggplot(data=data.hznu.teaching.energy.std,
-       aes(x=energyClusterName,y=sumUiElec,color=energyClusterName))+
-  geom_boxplot()+facet_wrap(~finalState)+theme_bw()#+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggplot(data=data.hznu.teaching.energy.std,aes(x=sumElec))+geom_density()+facet_wrap(~energyClusterName+finalState,nrow = 4)+
+ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0] %>% mutate(.,modiSeat=as.factor(modiSeat)),
+       aes(x=modiSeat,y=sumElec,color=modiSeat))+#ylim(0,2.5)+ color=energyClusterName
+  geom_boxplot(outlier.colour = NA)+facet_wrap(~finalState)+theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
+        legend.text = element_text(size=14))
+
+
+
+ggplot(data=data.hznu.teaching.energy.std,aes(x=areaEUI))+geom_density()+facet_wrap(~energyClusterName+finalState,nrow = 4)+xlim(0,2.5)+
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
         legend.text = element_text(size=14),legend.position = c(0.1,0.9))

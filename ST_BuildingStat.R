@@ -46,8 +46,12 @@ stat.hznu.roomAc.teaching$roomNo<-apply(X = stat.hznu.roomAc.teaching[,"roomCode
                                           return(substr(x,nchar(x)-2,nchar(x)))
                                         })
 
-
-
-
-
+####导入实际调研数据####
+info.hznu.teaching.room<-read.xlsx(file="HZNU_Teaching _RoomInfo_Export.xlsx",sheetIndex = 1) %>% 
+                         mutate(.,roomCode=as.character(.$roomCode)) %>% as.data.table(.) 
+# str(info.hznu.teaching.room)
+#检查一下教室分布情况
+ggplot(data=info.hznu.teaching.room %>% mutate(.,modiSeat=as.factor(modiSeat)),aes(x=modiSeat,y=acCount))+geom_boxplot()
+ggplot(data=info.hznu.teaching.room %>% mutate(.,acCount=as.factor(acCount)),aes(x=acCount,y=modiArea))+geom_boxplot()
+describeBy(info.hznu.teaching.room[,c("modiArea","area")],list(modiSeat=info.hznu.teaching.room$modiSeat),na.)
 
