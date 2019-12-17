@@ -308,7 +308,10 @@ data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,
 data.hznu.teaching.energy.std<-merge(x=data.hznu.teaching.energy.std,y=info.hznu.teaching.room[,c("roomCode","area","modiArea","seatCount","modiSeat")],
                                      by.x="roomCode",by.y="roomCode",all.x = TRUE)
 data.hznu.teaching.energy.std$areaEUI<-data.hznu.teaching.energy.std$sumElec/data.hznu.teaching.energy.std$modiArea
-
+stat.hznu.teaching.energy.bySeat<-data.hznu.teaching.energy.std[,.(meanSumElec=mean(sumElec,na.rm = TRUE),
+                                                                   meanAreaEUI=mean(areaEUI,na.rm = TRUE),
+                                                                   modiSeat=modiSeat[1],
+                                                                   finalState=finalState[1]),by=paste(finalState,modiSeat,sep = "_")]
 
 
 ggplot(data=stat.hznu.energy.tryCluster.descr,
@@ -320,10 +323,13 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
   geom_point(alpha=0.3,position = "jitter")+ylim(c(0,100))+#xlim(c(0,5))+#stat_density_2d(aes(fill=..level..,color=energyClusterName),geom="polygon")+
   theme_bw()
 
-
+#检查教室容量与EUI或绝对能耗分布关系
 ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0] %>% mutate(.,modiSeat=as.factor(modiSeat)),
-       aes(x=modiSeat,y=sumElec,color=modiSeat))+#ylim(0,2.5)+ color=energyClusterName
-  geom_boxplot(outlier.colour = NA)+facet_wrap(~finalState)+theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+       aes(x=modiSeat,y=areaEUI))+#ylim(0,2.5)+ color=energyClusterName
+  geom_boxplot(outlier.colour = NA,width=0.5)+facet_wrap(~finalState)+  
+  geom_line(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+  geom_point(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ylim(0,2.5)+
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
         legend.text = element_text(size=14))
 

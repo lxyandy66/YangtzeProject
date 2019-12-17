@@ -1,13 +1,13 @@
-####è¯¥è„šæœ¬ä»…ç”¨äºJCQUå‘è¡¨æœŸåˆŠä½œå›¾ç”¨####
+####¸Ã½Å±¾½öÓÃÓÚJCQU·¢±íÆÚ¿¯×÷Í¼ÓÃ####
 library(data.table)
 library(ggplot2)
 library(ggthemes)
 library(reshape2)
 
-####åŠ è½½Excelå¤„ç†å®ŒæˆæŠ¥è¡¨####
+####¼ÓÔØExcel´¦ÀíÍê³É±¨±í####
 data.hznu.apriori <- as.data.table(read.csv("HZNU_Apriori.csv"))
 
-####å¤©æ°”æ•°æ®å¤„ç†####
+####ÌìÆøÊı¾İ´¦Àí####
 weather.HZ$year <- format(weather.HZ$time, "%Y")
 weather.HZ$month <- as.numeric(format(weather.HZ$time, "%m"))
 weather.HZ$day <- as.numeric(format(weather.HZ$time, "%d"))
@@ -47,8 +47,8 @@ ggplot(data = data.hznu.apriori, aes(x = timePeriod, y = setTemp)) + geom_boxplo
   #                               "7_first","7_mid","7_last",
   #                               "8_first","8_mid","8_last",
   #                               "9_first","9_mid","9_last")
-                     # labels =  c("6æœˆä¸Š","6æœˆä¸­","6æœˆä¸‹",
-                     #               "7æœˆä¸Š","7æœˆä¸­","7æœˆä¸‹",
-                     #               "8æœˆä¸Š","8æœˆä¸­","8æœˆä¸‹",
-                     #               "9æœˆä¸Š","9æœˆä¸­","9æœˆä¸‹")
+                     # labels =  c("6ÔÂÉÏ","6ÔÂÖĞ","6ÔÂÏÂ",
+                     #               "7ÔÂÉÏ","7ÔÂÖĞ","7ÔÂÏÂ",
+                     #               "8ÔÂÉÏ","8ÔÂÖĞ","8ÔÂÏÂ",
+                     #               "9ÔÂÉÏ","9ÔÂÖĞ","9ÔÂÏÂ")
                      # )#+geom_line(data = data.hz.weather.monthly[year=="2017"],aes(x=timePeriod,y = aveTemp))
