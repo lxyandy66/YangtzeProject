@@ -78,12 +78,5 @@ confusionMatrix(table(rtree.predict,data.plfm.office.test$cluster))
 capture.output(c(confusionMatrix(table(rtree.predict,data.plfm.office.test$cluster)),asRules(tree.both)),
                file =paste("PLFM_office_行为_heating_决策树评估_bestCP.txt"))
 
-#住宅开窗和空调使用数据去重
-fileName<-c("RSDT_Window_final_upload_LVRM.xlsx","RSDT_Window_final_upload_BDRM.xlsx",
-            "RSDT_AC_final_upload_LVRM.xlsx","RSDT_AC_final_upload_BDRM.xlsx")
-for(i in 1:length(fileName)){
-  read.xlsx(file = fileName[i],sheetIndex = 1) %>% as.data.table(.) %>% 
-    .[!duplicated(.[,c("buildingCode","time")])] %>% write.xlsx(x=.,file = fileName[i])
-}
 
 
