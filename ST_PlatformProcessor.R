@@ -120,3 +120,7 @@ nn<-nn[,.(hour=hour[1],
           ),by=(seasonHour=paste(modiSeason,hour,sep = "_"))]
 nn<-dcast(nn[,-c("seasonHour")],modiSeason~hour)
 write.xlsx(x=nn,file="WJJ_office_hourlyWindow.xlsx")
+
+####HZNU教学逐时空调使用概率处理####
+melt(data.hznu.teaching.use[,c("modiSeason",sprintf("h%d",8:22))],id.vars = "modiSeason")%>%
+  dcast(.,modiSeason~variable,mean) %>%write.xlsx(x=.,file="HZNU_HourlyACUsedRate.xlsx")
