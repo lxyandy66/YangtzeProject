@@ -37,6 +37,50 @@ modiSelect<-"cooling"
                                              data=data.hznu.energy.decoupling.select.training,ntree=1000)
   importance(fit.forest.energy.decoupling)
   predictTest(testSet = data.hznu.energy.decoupling.select.test,resultValue = data.hznu.energy.decoupling.select.test$energyClusterName,
-              predictableModel = fit.forest.energy.decoupling,isOutput = T,fileName = paste("HZNU",modiSelect,"RF_Evaluation_seed=19950711.txt",sep = "_"))
+              predictableModel = fit.forest.energy.decoupling,isOutput = TRUE,fileName = paste("HZNU",modiSelect,"RF_Evaluation_seed=19950711.txt",sep = "_"))
   
 }
+
+tmp.roc<-data.table(real=data.hznu.energy.decoupling.select.test$energyClusterName,
+                    predict(fit.forest.energy.decoupling,data.hznu.energy.decoupling.select.test,type="prob")) %>% melt(.,id.vars = "real")%>%
+                    .[real==variable]
+tmp.roc<-melt(tmp.roc,id.vars = "real")
+#丢python里面试试
+write.csv(x=tmp.roc[,c("real","value")],file = "rf_cooling.csv")
+nn<-multiclass.roc(predictor=tmp.roc$value,response=tmp.roc$real,plot=TRUE,smooth=FALSE)
+
+rm(nn1)
+for(i in 1:length(nn$rocs)){
+  if(!exists("nn1")){
+    nn1<-data.table(level1=nn$rocs[[i]]$levels[1],level2=nn$rocs[[i]]$levels[2],sensitivities=nn$rocs[[i]]$sensitivities,specificities=nn$rocs[[i]]$specificities)
+  }else{
+    nn1<-rbind(nn1,data.table(level1=nn$rocs[[i]]$levels[1],level2=nn$rocs[[i]]$levels[2],sensitivities=nn$rocs[[i]]$sensitivities,specificities=nn$rocs[[i]]$specificities))
+  }
+}
+ggplot(data=nn1,aes(x=1-specificities,y=sensitivities,color=(com=paste(level1,level2))))+geom_point(size=0.5)+geom_line()
+nn2<-nn1[,.(sensitivities=mean(sensitivities,na.rm = TRUE)),by=(modiSpeci=as.numeric(substr(specificities,1,4)))]
+ggplot(data=nn2,aes(x=1-modiSpeci,y=sensitivities))+geom_point(size=0.5)+geom_line()
+
+
+#EI外审意见的一些修改和数据可视化
+nn<-data.hznu.teaching.decoupling[,.(meanSetTemp=mean(setTemp,na.rm=TRUE)),by=(month=substr(date,6,7))] %>%
+    cbind(.,meanOutTemp=data.weather.airport.final[,.(meanOutTemp=mean(outTemp,na.rm = TRUE)),
+                                                 by=(month=substr(labelHour,6,7))]$meanOutTemp)
+
+#室外温度与设定温度的可视化
+ggplot()+geom_boxplot(data=data.hznu.teaching.decoupling,aes(x=(month=as.factor(substr(date,6,7))),y=setTemp),outlier.colour = NA,width=0.45)+
+  geom_point(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1),size=3,shape=2,color="red")+geom_line(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1,color="red"),size=0.75)+
+  geom_point(data=nn,aes(x=factor(month),y=meanSetTemp,group=1),size=3)+geom_line(data=nn,aes(x=month,y=meanSetTemp,group=1))+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(axis.text=element_text(size=16),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
+        legend.text = element_text(size=16))
+
+
+
+ggplot(data=data.hznu.teaching.decoupling,aes(x=(month=as.factor(substr(date,6,7))),y=setTemp))+#ylim(0,2.5)+ color=energyClusterName
+  geom_boxplot(outlier.colour = NA,width=0.5)+facet_wrap(~finalState)+  
+  geom_line(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+  geom_point(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ylim(0,2.5)+
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
+        legend.text = element_text(size=14))

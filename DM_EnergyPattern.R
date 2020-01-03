@@ -311,6 +311,7 @@ data.hznu.teaching.energy.std$areaEUI<-data.hznu.teaching.energy.std$sumElec/dat
 stat.hznu.teaching.energy.bySeat<-data.hznu.teaching.energy.std[,.(meanSumElec=mean(sumElec,na.rm = TRUE),
                                                                    meanAreaEUI=mean(areaEUI,na.rm = TRUE),
                                                                    modiSeat=modiSeat[1],
+                                                                   count=length(labelRoomDay),
                                                                    finalState=finalState[1]),by=paste(finalState,modiSeat,sep = "_")]
 
 
@@ -334,7 +335,33 @@ ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0] %>% muta
         legend.text = element_text(size=14))
 
 
+#检查各能耗模式对应的教室EUI或能耗
+ggplot(data=data.hznu.teaching.energy.std[modiSeat!=0],
+       aes(y=areaEUI,x=factor(energyClusterName,order=TRUE,levels=c("LowEnergy","MidEnergy","LongTime_MidEnergy","LongTime_HighEnergy")),color=energyClusterName))+
+  geom_boxplot(width=0.5)+facet_wrap(~as.factor(modiSeat),nrow=2)+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
+        legend.text = element_text(size=14))
 
-ggplot(data=data.hznu.teaching.energy.std,aes(x=areaEUI))+geom_density()+facet_wrap(~energyClusterName+finalState,nrow = 4)+xlim(0,2.5)+
+#检查各教室的空调使用情况
+ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot()+ylim(0,1)
+
+nn<-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot()+
+  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed),fun.y=mean,geom="point")
+  nn+scale_y_continuous(sec.axis = sec_axis(~.*4))
+
+nn<-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=meanAcUsed))+geom_boxplot()+
+  geom_boxplot(aes(y=acIntensity))
+  #stat_summary(aes(x=as.factor(modiSeat),y=acIntensity),fun.y = "mean",geom = "point")+
+  
+nn+scale_y_continuous(limits = c(0,16),sec.axis = sec_axis(~./16,name = "mm"))#+stat_summary(aes(x=as.factor(modiSeat),y=acIntensity,group=1),fun.y = "mean",geom = "line")
+
+
+
+#检查各能耗模式的EUI分布情况
+ggplot(data=data.hznu.teaching.energy.std,aes(x=energyClusterName,y=areaEUI))+geom_boxplot(outlier.colour = NA,width=0.5)+
+  stat_summary(fun.y =mean,geom = "point")+
+  facet_wrap(~finalState)+ylim(0,2.5)+
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
         legend.text = element_text(size=14),legend.position = c(0.1,0.9))
+
