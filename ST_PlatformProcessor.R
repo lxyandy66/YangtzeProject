@@ -97,3 +97,30 @@ data.plfm.rsdt.ac<-as.data.table(read.xlsx(file = "PLFM_RSDT_AC.xlsx",sheetIndex
 write.xlsx(data.plfm.rsdt.window,file="PLFM_RSDT_Window_final.xlsx")
 write.xlsx(data.plfm.rsdt.ac,file="PLFM_RSDT_AC_final.xlsx")
 
+#住宅开窗和空调使用数据去重
+fileName<-c("RSDT_Window_final_upload_LVRM.xlsx","RSDT_Window_final_upload_BDRM.xlsx",
+            "RSDT_AC_final_upload_LVRM.xlsx","RSDT_AC_final_upload_BDRM.xlsx")
+for(i in 1:length(fileName)){
+  read.xlsx(file = fileName[i],sheetIndex = 1) %>% as.data.table(.) %>% 
+    .[!duplicated(.[,c("buildingCode","time")])] %>% write.xlsx(x=.,file = fileName[i])
+}
+
+length(unique(data.plfm.rsdt.window$locationID))
+
+
+####WJJ办公数据处理####
+#逐时办公空调使用概率
+nn<-read.xlsx(file = "WJJ_office_Window.xlsx",sheetIndex = 1) %>% as.data.table(.)
+nn<-melt(nn[,c("hour","dataType",paste("X",c(1:12),sep = ""))],id.var=c("hour","dataType"))
+nn$modiSeason<-apply(nn[,"variable"],MARGIN = 1,function(x){ getSeason(as.numeric(substring(x,2)))})
+nn[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Transition"
+nn<-nn[,.(hour=hour[1],
+          modiSeason=modiSeason[1],
+          usedRate=1-(sum(value[dataType=="SUM"],na.rm = TRUE)/sum(value[dataType=="COUNT"],na.rm = TRUE))
+          ),by=(seasonHour=paste(modiSeason,hour,sep = "_"))]
+nn<-dcast(nn[,-c("seasonHour")],modiSeason~hour)
+write.xlsx(x=nn,file="WJJ_office_hourlyWindow.xlsx")
+
+####HZNU教学逐时空调使用概率处理####
+melt(data.hznu.teaching.use[,c("modiSeason",sprintf("h%d",8:22))],id.vars = "modiSeason")%>%
+  dcast(.,modiSeason~variable,mean) %>%write.xlsx(x=.,file="HZNU_HourlyACUsedRate.xlsx")
