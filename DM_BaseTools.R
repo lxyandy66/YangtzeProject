@@ -37,6 +37,7 @@ library(kknn)
 library(knncat)
 library(car)
 library(forecast)
+library(tseries)
 
 ####预处理部分####
 getMode <- function(x,na.rm=FALSE) {

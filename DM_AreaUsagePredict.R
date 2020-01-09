@@ -64,10 +64,11 @@ predictUsageAttr<-list(simpleKnn=c("stdOutTemp","stdWeekday","isBizday","hour"),
                        Transition=c("stdRhOut","d1h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
                        Summer_warm=c("d7h0_FullOnRatio","d1_lateDaytimeRatio","d7_daytimeRatio","d1_lateDaytimeRatio"),
                        Summer=c("stdWindSpeed","d1h0_FullOnRatio","d7_onDemandRatio","d7_daytimeRatio"))
+
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   for(j in 0:9){
     #根据id mod 10 来确定交叉验证的划分
-    seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]])#predictUsageAttr[["simpleKnn"]]
+    seasonalAttr<-c(predictUsageAttr[["constant"]])#predictUsageAttr[["simpleKnn"]],predictUsageAttr[[i]]
     fit.kknn<-kknn(formula = as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   kernel = "optimal",k=10,na.action = na.exclude,
                   train = data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
@@ -94,6 +95,11 @@ boxplot.stats(data.hznu.area.predict.use$rlatSimpleKnnErr)#6.381677e-05 2.090334
 mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr,na.rm = TRUE)#0.942
 getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.485979
 
+# constKnn
+# MAPE 0.376
+# RMSE 0.01889924
+# box.stat 1.314053e-16 8.693682e-02 2.175494e-01 5.131049e-01 1.146241e+00
+# R-square 0.9015565
 
 
 ####SVM进行预测####
@@ -168,7 +174,7 @@ getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.pr
 
 #
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio")] %>% 
+ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")] %>% #,"svmInitPred","svmIterPred"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","year","date")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)+
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.88))

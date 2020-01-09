@@ -65,6 +65,25 @@ data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,
                                   y=data.weather.airport.final[!duplicated(data.weather.airport.final[,"datetime"]),
                                                                c("datetime","outTemp","rhOut","windSpeed","weather")],
                                   all.x = TRUE,by.x = "datetime",by.y = "datetime")
+
+
+####能耗基本缺失值处理####
+# 切记最好应该统一处理！！
+# 思路
+# 1、对于能耗NA值，若该时刻的fullOnRatio==0，则置0
+data.hznu.area.predict.use[is.na(modiElec)&fullOnRatio==0]$modiElec<-0
+
+nn<-data.hznu.area.predict.use[date %in% unique(data.hznu.area.predict.use[is.na(modiElec)]$date)]
+#还是有2017-01-28和2017-05-01缺失
+#考虑直接按小时的找一天能耗和气候相近的有着相同使用率的进行补全
+nn1<-data.hznu.area.predict.use[fullOnRatio>0.00328&fullOnRatio<0.003315&month(datetime)%in% c(1,5)&year(datetime)=="2017",1:8] %>% 
+  mutate(.,hour=hour(datetime),month=month(datetime)) %>% as.data.table(.) %>%.[!duplicated(.)]
+
+data.hznu.area.predict.use[is.na(modiElec)]$modiElec<-apply(X = data.hznu.area.predict.use[is.na(modiElec),"datetime"],MARGIN = 1,
+                                                            FUN = function(x){
+                                                              mean(nn1[hour==hour(x)&month==month(x)]$modiElec,na.rm = TRUE)
+                                                            })
+
 ####加一些辅助变量####
 data.hznu.area.predict.raw<-data.hznu.area.predict.raw %>%
                             mutate(.,fullOnRatio=onCount/count,dayOnRatio=onCount/dayOnCount)
@@ -101,6 +120,17 @@ for(i in c(0,1,2,7)){#0天，1天，2天，7天前
     }
   }
 }
+
+####加入各能耗模式占比####
+temp.hznu.area.energyPattern<-data.hznu.teaching.energy.std[,.(count=length(labelRoomDay),
+                                                               lowEnergyRatio=length(labelRoomDay[energyClusterName=="LowEnergy"])/length(labelRoomDay),
+                                                               midEnergyRatio=length(labelRoomDay[energyClusterName=="MidEnergy"])/length(labelRoomDay),
+                                                               ltMeRatio=length(labelRoomDay[energyClusterName=="LongTime_MidEnergy"])/length(labelRoomDay),
+                                                               ltHeRatio=length(labelRoomDay[energyClusterName=="LongTime_HighEnergy"])/length(labelRoomDay)
+                                                               ),by=date]#经检查无重复
+data.hznu.area.signCheck<-merge(x=data.hznu.area.signCheck,y=temp.hznu.area.energyPattern[,-c("count")],
+                                all.x=TRUE,by.x = "date",by.y = "date")
+
 
 ####统计各使用模式日内占比####
 data.hznu.area.signCheck<-data.hznu.use.predict.building.raw[,.(
@@ -153,46 +183,58 @@ data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Tran
 ####检查各因素显著性####
 hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")#"r1h0",
 patternRatioName<-c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio")
+energyPatternRatioName<-c("lowEnergyRatio","midEnergyRatio","ltMeRatio","ltHeRatio")
 signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday"),#
                fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
                # dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
                stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
-               patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),patternRatioName,sep = "")))#rep("r1_",6),
+               patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),patternRatioName,sep = "")),#rep("r1_",6),
+               energyPatternRatio=c(paste(c(rep("d1_",4),rep("d7_",4)),energyPatternRatioName,sep = ""))#rep("r1_",4),
+               )#rep("r1_",6),
 
-for(i in signAttr$patternRatio){
-  data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
-                                                                FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -24*3600)
-  data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
-                                                                FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -7*24*3600)
-}#这一段算法不好，太慢了，肯定不能直接按对象来，直接按天来会好得多
+# for(i in signAttr$patternRatio){
+#   data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
+#                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -24*3600)
+#   data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
+#                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -7*24*3600)
+# }#这一段算法不好，太慢了，肯定不能直接按对象来，直接按天来会好得多
 #我是个傻*吗...这个明显不对的东西
 data.hznu.area.signCheck[,c(paste(signAttr$patternRatio,"_org",sep = ""))]<-NULL
 
-
+#取历史模式相关数据
 for(i in unique(data.hznu.area.signCheck$date)){
-  #取前一个参考天
+  ##取前一个参考天
   targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
                                        timeColName = "date",flagColName = "isBizday",
                                        expFlag = data.hznu.area.signCheck[date==i]$isBizday[1],timeInvl = -24*3600))
-  # cat("thisTime: ",i,"\tTargetTime: ",,"\n")
+  #取行为模式
   data.hznu.area.signCheck[date==i,c(paste(rep("r1_",6),patternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  #取能耗模式
+  data.hznu.area.signCheck[date==i,c(paste(rep("r1_",4),energyPatternRatioName,sep = ""))]<-
+    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
   
   #取前一天
   targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
                                        timeColName = "date",timeInvl = -24*3600))
   data.hznu.area.signCheck[date==i,c(paste(rep("d1_",6),patternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  data.hznu.area.signCheck[date==i,c(paste(rep("d1_",4),energyPatternRatioName,sep = ""))]<-
+    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
+  
   #取前七天
   targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
                                        timeColName = "date",timeInvl = -7*24*3600))
   data.hznu.area.signCheck[date==i,c(paste(rep("d7_",6),patternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  data.hznu.area.signCheck[date==i,c(paste(rep("d7_",4),energyPatternRatioName,sep = ""))]<-
+      data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
 }
 
 nn<-data.hznu.area.signCheck[,c("date","isBizday","onDemandRatio","d1_onDemandRatio","d1_onDemandRatio_org")]
 
 data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start = 1)
+
 
 ####按季节归一化####
 data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
@@ -200,15 +242,28 @@ data.hznu.area.signCheck.pickup$stdModiElec<- -9999
 for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
+####按logistics循环统计变量显著性####
 rm(stat.hznu.area.predict.sign)
-for(i in c("stdModiElec","fullOnRatio")){
+for(i in c("stdModiElec")){#,"fullOnRatio"
   for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
-    for(k in c("weatherAttr","hst","patternRatio")){
-      if(k=="hst"){
-        fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[i]],collapse = "+")))
-      }else{
-        fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[k]],collapse = "+")))
+    for(k in c("weatherAttr","hst","patternRatio","energyPatternRatio","useHst")){
+      #根据目前循环分组选取适合公式 #我觉得可以简化一下
+      if(k=="useHst"){#useHst仅对能耗模式考虑，因此提前判断
+        if(i=="stdModiElec"){
+          fmla.area.sign<-as.formula(paste(i,"~",paste(c("fullOnRatio",signAttr[["fullOnRatio"]]),collapse = "+")))
+        }#计算能耗显著性时考虑历史空调使用率时仍包括此刻的空调使用率，在实际模型中该值来源于预测
+        else{
+          next#只针对能耗显著性才考虑行为的影响
+        }
       }
+      else{
+        if(k=="hst"){
+          fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[i]],collapse = "+")))
+        }else{
+          fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[k]],collapse = "+")))
+        }
+      }
+      #根据得到的显著性计算formula通过logistics计算显著性
       fit<-glm(fmla.area.sign,
                data=data.hznu.area.signCheck.pickup[modiSeason==j],family = binomial(),na.action = na.omit)
       stat.fit<-summary(fit)
@@ -221,7 +276,7 @@ for(i in c("stdModiElec","fullOnRatio")){
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_AttrSign_origin.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Energy_AttrSign_final.xlsx")
 
 
 data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
@@ -246,7 +301,8 @@ nrow(stat.hznu.area.completeCheck[isEnergyComplete&isEnergyComplete]) #579
 
 
 ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime),year=as.factor(year(datetime)),
-                                                  monthDay=format(datetime,format="%m-%d")) %>% .[substr(datetime,1,7) %in% c("2017-05","2017-06","2017-07","2017-08","2017-09","2017-10")]),
+                                                  monthDay=format(datetime,format="%m-%d")) %>% 
+               as.data.table(.) %>%.[substr(datetime,1,7) %in% c("2017-05","2017-06","2017-07","2017-08","2017-09","2017-10")]),
        aes(x=date,y=fullOnRatio,color=isBizday,group=date,shape=year))+geom_line()+geom_point()+theme(axis.text.x = element_text(angle = 90, hjust = 1))#+facet_wrap(~year,ncol=1)
 # c("2018-11","2018-12","2019-01","2019-02")]#这一截不行
 
