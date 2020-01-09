@@ -297,7 +297,9 @@ stat.hznu.energy.tryCluster.descr<-data.hznu.teaching.energy.std[,.(
   allDayUsage=length(labelRoomDay[clusterName=="All-Day"])
 ),by=paste(energyClusterName,finalState,sep = "_")]
 
-write.xlsx(x=stat.hznu.energy.tryCluster.descr,file = "HZNU___.xlsx")
+write.xlsx(x=stat.hznu.energy.tryCluster.descr,file = "HZNU_teaching_EnergyPattern_Evaluate.xlsx")
+
+nn<-boxplot(acIntensity~energyClusterName,data=data.hznu.teaching.energy.std[finalState=="cooling"])
 
 
 data.hznu.teaching.energy.std$meanRuntime<-apply(data.hznu.teaching.energy.std[,c("finalState","energyClusterName")],MARGIN = 1,
@@ -314,6 +316,15 @@ stat.hznu.teaching.energy.bySeat<-data.hznu.teaching.energy.std[,.(meanSumElec=m
                                                                    count=length(labelRoomDay),
                                                                    finalState=finalState[1]),by=paste(finalState,modiSeat,sep = "_")]
 
+
+data.hznu.teaching.energy.std$modiSeason<-apply(X = data.hznu.teaching.energy.std[,"date"],MARGIN = 1,
+                                                FUN = function(x){
+                                                  season<-getSeason(as.numeric(substr(x,6,7)))
+                                                  if(season %in% c("Spring","Autumn"))
+                                                    return("Transition")
+                                                  else
+                                                    return(season)
+                                                })
 
 ggplot(data=stat.hznu.energy.tryCluster.descr,
        aes(x=runtime,y=sumElec,size=sdElec,color=energyClusterName))+
@@ -343,20 +354,39 @@ ggplot(data=data.hznu.teaching.energy.std[modiSeat!=0],
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
         legend.text = element_text(size=14))
 
-#检查各教室的空调使用情况
-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot()+ylim(0,1)
+#检查各教室的空调使用情况，使用强度与使用台数和面积的关系
+ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot(width=0.5)+
+  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/8,color="red",group=1,size=0.09),fun.y=mean,geom="point")+
+  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/8,group=1,color="red",size=0.08),fun.y=mean,geom="line")+
+  scale_y_continuous(sec.axis = sec_axis(~.*8,name = "meanAcUsed"))+facet_wrap(~finalState)+
+  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(axis.text=element_text(size=16),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
+        legend.text = element_text(size=16))
 
-nn<-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot()+
-  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed),fun.y=mean,geom="point")
-  nn+scale_y_continuous(sec.axis = sec_axis(~.*4))
+#检查各行为模式下空调使用强度
+ggplot(data = data.hznu.teaching.energy.std[acCount>1&acIntensity<=1],aes(x=clusterName,y=acIntensity))+
+  geom_boxplot()+stat_summary(fun.y = "mean",geom = "point")+facet_wrap(~finalState)
+ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0&acCount>1&acIntensity<=1],aes(x=clusterName,y=meanAcUsed))+
+  geom_boxplot(width=0.5)+stat_summary(fun.y = "mean",geom = "point")+facet_wrap(~finalState)
 
-nn<-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=meanAcUsed))+geom_boxplot()+
-  geom_boxplot(aes(y=acIntensity))
-  #stat_summary(aes(x=as.factor(modiSeat),y=acIntensity),fun.y = "mean",geom = "point")+
-  
-nn+scale_y_continuous(limits = c(0,16),sec.axis = sec_axis(~./16,name = "mm"))#+stat_summary(aes(x=as.factor(modiSeat),y=acIntensity,group=1),fun.y = "mean",geom = "line")
+#各行为下教室使用占比
+data.hznu.teaching.energy.std$areaScale<-apply(X = data.hznu.teaching.energy.std[,"acCount"],MARGIN = 1,FUN = getAreaLevel)
+ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
+       aes(fill=clusterName,x=as.factor(modiSeat)))+geom_bar()#真没啥区别
 
+ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
+       aes(x=as.factor(modiSeat),y=acIntensity,color=clusterName,group=clusterName))+stat_summary(fun.y = "mean",geom = "point")+stat_summary(fun.y = "mean",geom = "line")
 
+#各行为模式下空调设定温度分布
+ggplot(data=data.hznu.teaching.decoupling[finalState=="cooling"],aes(x=clusterName,y=setTemp))+geom_boxplot()+stat_summary(fun.y = "mean",geom = "point",color="red")#+facet_wrap(~finalState)
+
+#不同季节下行为模式和能耗
+ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
+       aes(x=substr(date,6,7),fill=energyClusterName))+geom_bar(position = "fill")+facet_wrap(~clusterName+areaScale,nrow=2)#真没啥区别
+
+#检查16台空调的教室的空调使用情况
+nn<-data.hznu.teaching.energy.std[acCount==16]
+ggplot(data = data.hznu.teaching.energy.std[acCount==16],aes(x=meanAcUsed,color=roomCode))+geom_density()
 
 #检查各能耗模式的EUI分布情况
 ggplot(data=data.hznu.teaching.energy.std,aes(x=energyClusterName,y=areaEUI))+geom_boxplot(outlier.colour = NA,width=0.5)+

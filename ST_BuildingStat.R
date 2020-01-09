@@ -53,5 +53,5 @@ info.hznu.teaching.room<-read.xlsx(file="HZNU_Teaching _RoomInfo_Export.xlsx",sh
 #检查一下教室分布情况
 ggplot(data=info.hznu.teaching.room %>% mutate(.,modiSeat=as.factor(modiSeat)),aes(x=modiSeat,y=acCount))+geom_boxplot()
 ggplot(data=info.hznu.teaching.room %>% mutate(.,acCount=as.factor(acCount)),aes(x=acCount,y=modiArea))+geom_boxplot()
-describeBy(info.hznu.teaching.room[,c("modiArea","area")],list(modiSeat=info.hznu.teaching.room$modiSeat),na.)
+nn<-describeBy(info.hznu.teaching.room[,c("modiArea","area")],list(modiSeat=info.hznu.teaching.room$modiSeat),mat = TRUE)
 

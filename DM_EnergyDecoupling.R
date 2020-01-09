@@ -12,7 +12,7 @@ data.hznu.energy.decoupling$clusterName<-as.factor(data.hznu.energy.decoupling$c
 
 
 
-modiSelect<-"cooling"
+modiSelect<-"heating"
 {
   # 训练集测试集划分
   data.hznu.energy.decoupling.select<-data.hznu.energy.decoupling[finalState==modiSelect]
@@ -43,10 +43,9 @@ modiSelect<-"cooling"
 
 tmp.roc<-data.table(real=data.hznu.energy.decoupling.select.test$energyClusterName,
                     predict(fit.forest.energy.decoupling,data.hznu.energy.decoupling.select.test,type="prob")) %>% melt(.,id.vars = "real")%>%
-                    .[real==variable]
-tmp.roc<-melt(tmp.roc,id.vars = "real")
+                    .[real==variable] %>% .[,c("real","value")]
 #丢python里面试试
-write.csv(x=tmp.roc[,c("real","value")],file = "rf_cooling.csv")
+# write.csv(x=tmp.roc[,c("real","value")],file = "rf_cooling.csv")
 nn<-multiclass.roc(predictor=tmp.roc$value,response=tmp.roc$real,plot=TRUE,smooth=FALSE)
 
 rm(nn1)
@@ -58,8 +57,8 @@ for(i in 1:length(nn$rocs)){
   }
 }
 ggplot(data=nn1,aes(x=1-specificities,y=sensitivities,color=(com=paste(level1,level2))))+geom_point(size=0.5)+geom_line()
-nn2<-nn1[,.(sensitivities=mean(sensitivities,na.rm = TRUE)),by=(modiSpeci=as.numeric(substr(specificities,1,4)))]
-ggplot(data=nn2,aes(x=1-modiSpeci,y=sensitivities))+geom_point(size=0.5)+geom_line()
+nn2<-nn1[,.(specificities=mean(specificities,na.rm = TRUE)),by=(modiSensi=as.numeric(substr(sensitivities,1,4)))]#modiSpeci
+ggplot(data=nn2,aes(x=1-specificities,y=modiSensi))+geom_point(size=0.5)+geom_line()
 
 
 #EI外审意见的一些修改和数据可视化
@@ -71,6 +70,7 @@ nn<-data.hznu.teaching.decoupling[,.(meanSetTemp=mean(setTemp,na.rm=TRUE)),by=(m
 ggplot()+geom_boxplot(data=data.hznu.teaching.decoupling,aes(x=(month=as.factor(substr(date,6,7))),y=setTemp),outlier.colour = NA,width=0.45)+
   geom_point(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1),size=3,shape=2,color="red")+geom_line(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1,color="red"),size=0.75)+
   geom_point(data=nn,aes(x=factor(month),y=meanSetTemp,group=1),size=3)+geom_line(data=nn,aes(x=month,y=meanSetTemp,group=1))+
+  scale_y_continuous(breaks = seq(0,35,2.5))+
   theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
   theme(axis.text=element_text(size=16),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
         legend.text = element_text(size=16))
