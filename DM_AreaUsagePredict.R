@@ -43,6 +43,14 @@ mean(data.hznu.area.predict.use[!is.infinite(rlatTsErr)]$rlatTsErr,na.rm = TRUE)
 getRSquare(pred = data.hznu.area.predict.use$tsFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8631175
 
 
+#时刻记得是否一不留神重复了或者多出了行，尤其是需要针对必须唯一的key
+data.hznu.area.predict.use[duplicated(data.hznu.area.predict.use$datetime)]
+
+####对于十折的结果进行单独储存####
+data.hznu.area.predict.log<-data.table(id=-999,datetime=as.POSIXct("2019-01-09"),modiSeason="modiSeason",
+                                       target="targetResult,fullOnRatio,etc.",method="knn/svm/etc",setType="train/test",
+                                       round=-999,predValue=-999,realValue=-999)[-1]
+archieveItem<-names(data.hznu.area.predict.log)
 
 ####试一试KNN####
 #增加一个ID行号便于十折
@@ -50,6 +58,8 @@ getRSquare(pred = data.hznu.area.predict.use$tsFullOnRatio,ref = data.hznu.area.
 data.hznu.area.predict.use<-as.data.table(cbind(id=1:nrow(data.hznu.area.predict.use),data.hznu.area.predict.use)) %>% 
                             mutate(.,knnFullOnRatio=-999,simpleKnnFullOnRatio= -999)
 
+
+data.hznu.area.predict.use$simpleKnnFullOnRatio<- -999
 # "stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"
 
 c("datetime","weekday","stdModiElec","modiSeason",
@@ -57,24 +67,29 @@ c("datetime","weekday","stdModiElec","modiSeason",
   "d1_onDemandRatio","d1_forenoonRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio",
   "d7_onDemandRatio","d7_daytimeRatio","d7_afternoonRatio","d7_lateDaytimeRatio")
 
-predictUsageAttr<-list(simpleKnn=c("stdOutTemp","stdWeekday","isBizday","hour"),
-                       constant=c("stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"),
+predictUsageAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"),
                        Winter=c("d1h0_FullOnRatio","d1_onDemandRatio","d1_forenoonRatio","d1_daytimeRatio","d7_onDemandRatio","d7_daytimeRatio"),
                        Winter_warm=c("stdRhOut","d7h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
                        Transition=c("stdRhOut","d1h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
                        Summer_warm=c("d7h0_FullOnRatio","d1_lateDaytimeRatio","d7_daytimeRatio","d1_lateDaytimeRatio"),
                        Summer=c("stdWindSpeed","d1h0_FullOnRatio","d7_onDemandRatio","d7_daytimeRatio"))
 
+data.hznu.area.predict.use<-as.data.table(data.hznu.area.predict.use)
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   for(j in 0:9){
     #根据id mod 10 来确定交叉验证的划分
-    seasonalAttr<-c(predictUsageAttr[["constant"]])#predictUsageAttr[["simpleKnn"]],predictUsageAttr[[i]]
+    seasonalAttr<-c(predictUsageAttr[["constant"]])#,predictUsageAttr[[i]]
     fit.kknn<-kknn(formula = as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   kernel = "optimal",k=10,na.action = na.exclude,
                   train = data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   test = data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]
                   )
     data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$simpleKnnFullOnRatio<-fit.kknn$fitted.values
+    #单独对十折的结果进行储存
+    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
+      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
+                 target="fullOnRatio",method="simpleKnn",setType="test",
+                 round=j,predValue=.$simpleKnnFullOnRatio,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
   }
 }
 data.hznu.area.predict.use[knnFullOnRatio== -999]$knnFullOnRatio<-NA
@@ -96,16 +111,19 @@ mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr
 getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.485979
 
 # constKnn
-# MAPE 0.376
-# RMSE 0.01889924
-# box.stat 1.314053e-16 8.693682e-02 2.175494e-01 5.131049e-01 1.146241e+00
-# R-square 0.9015565
+# MAPE 0.3859385
+# RMSE 0.01850447
+# box.stat NA
+# R-square 0.9027073
 
 
 ####SVM进行预测####
 
 #增加辅助变量
 #与KNN预测误差
+#保存一下knn的预测数据
+backup.hznu.area.predict.log<-data.hznu.area.predict.log
+
 data.hznu.area.predict.use$stdErrKnn<-(data.hznu.area.predict.use$knnFullOnRatio-data.hznu.area.predict.use$fullOnRatio) %>%
                                       normalize(.,upper = 0.9,lower = 0.1,intercept = 0.1)
 data.hznu.area.predict.use$h1_stdErrKnn<-c(NA,data.hznu.area.predict.use[2:nrow(data.hznu.area.predict.use)-1]$stdErrKnn)
@@ -113,23 +131,38 @@ data.hznu.area.predict.use$h1_stdErrKnn<-c(NA,data.hznu.area.predict.use[2:nrow(
 data.hznu.area.predict.use$svmInitPred<- -999
 
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
-  for(j in 1:10){
+  for(j in 0:9){
     seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]],"knnFullOnRatio","h1_stdErrKnn")
     fit.svm<-ksvm(x=as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
+    
     data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$svmInitPred<-
       predict(fit.svm,data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])])
+    
+    #单独对十折的结果进行储存，此处为预测集
+    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
+      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
+                 target="fullOnRatio",method="svmInitPred",setType="test",
+                 round=j,predValue=.$svmInitPred,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+    
+    #单独对十折的结果进行储存，此处为训练集
+    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])] %>%
+      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
+                 target="fullOnRatio",method="svmInitPred",setType="train",
+                 round=j,predValue=as.numeric(predict(fit.svm,.)),realValue=.$fullOnRatio) %>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+      
+    
     }
 }
 data.hznu.area.predict.use[svmInitPred== -999]$svmInitPred<-NA
 
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmInitPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.3011952
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmInitPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.3369349
 data.hznu.area.predict.use$rlatSvmInitErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$svmInitPred)/data.hznu.area.predict.use$fullOnRatio)
-RMSE(pred = data.hznu.area.predict.use$svmInitPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01751585
-boxplot.stats(data.hznu.area.predict.use$rlatSvmInitErr)#1.783526e-05 6.732056e-02 1.567721e-01 3.565884e-01 7.860812e-01
+RMSE(pred = data.hznu.area.predict.use$svmInitPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01850447
+boxplot.stats(abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$svmInitPred)/data.hznu.area.predict.use$fullOnRatio))#1.783526e-05 7.040944e-02 1.694174e-01 3.981347e-01 8.893175e-01
 mean(data.hznu.area.predict.use[!is.infinite(rlatSvmInitErr)]$rlatSvmInitErr,na.rm = TRUE)#0.3011952
-getRSquare(pred = data.hznu.area.predict.use$svmInitPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9202754
+getRSquare(pred = data.hznu.area.predict.use$svmInitPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9113674
 
 # 无knn参考值：
 # MAPE 0.3057088
@@ -138,7 +171,10 @@ getRSquare(pred = data.hznu.area.predict.use$svmInitPred,ref = data.hznu.area.pr
 # meanRlat 0.3057
 # R^2 0.9097206
 
+
+
 #增加SVM初始预测误差作为输入
+
 data.hznu.area.predict.use$stdErrSvm<-(data.hznu.area.predict.use$svmInitPred-data.hznu.area.predict.use$fullOnRatio) %>%
                                         normalize(.,upper = 0.9,lower = 0.1,intercept = 0.1)
 data.hznu.area.predict.use$h1_stdErrSvm<-c(NA,data.hznu.area.predict.use[2:nrow(data.hznu.area.predict.use)-1]$stdErrSvm)
@@ -146,23 +182,34 @@ data.hznu.area.predict.use$h1_stdErrSvm<-c(NA,data.hznu.area.predict.use[2:nrow(
 data.hznu.area.predict.use$svmIterPred<- -999
 
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
-  for(j in 1:10){
+  for(j in 0:9){
     seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]],"knnFullOnRatio","h1_stdErrKnn","svmInitPred","h1_stdErrSvm")
     fit.svm<-ksvm(x=as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
     data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$svmIterPred<-
       predict(fit.svm,data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])])
+    
+    #单独对十折的结果进行储存，此处为预测集
+    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
+      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
+                 target="fullOnRatio",method="svmIterPred",setType="test",
+                 round=j,predValue=.$svmIterPred,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+    
+    #单独对十折的结果进行储存，此处为训练集
+    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])] %>%
+      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
+                 target="fullOnRatio",method="svmIterPred",setType="train",
+                 round=j,predValue=as.numeric(predict(fit.svm,.)),realValue=.$fullOnRatio) %>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
   }
 }
 data.hznu.area.predict.use[svmIterPred== -999]$svmIterPred<-NA
 
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmIterPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.2593337
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$svmIterPred, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.2677874
 data.hznu.area.predict.use$rlatSvmIterErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$svmIterPred)/data.hznu.area.predict.use$fullOnRatio)
-RMSE(pred = data.hznu.area.predict.use$svmIterPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01464064
+RMSE(pred = data.hznu.area.predict.use$svmIterPred,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01462666
 boxplot.stats(data.hznu.area.predict.use$rlatSvmIterErr)#6.729713e-05 5.901312e-02 1.363222e-01 3.212818e-01 7.135150e-01
-mean(data.hznu.area.predict.use[!is.infinite(rlatSvmIterErr)]$rlatSvmIterErr,na.rm = TRUE)# 0.2593337
-getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9431014
+getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.predict.use$fullOnRatio)#0.9417149
 
 无svmInitPred参考
 # MAPE 0.295139
@@ -171,6 +218,7 @@ getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.pr
 # meanRlat 0.295139
 # R^2 0.9267991
 
+backup.hznu.area.predict.log<-data.hznu.area.predict.log[target!="modiElec"]
 
 #
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)

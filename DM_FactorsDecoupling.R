@@ -363,6 +363,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
 
 
 
+prp(list.hznu.decoupling.cart$cooling$Forenoon$holdOut,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05,cex=1.5)
+
 ####获取不同空调数对应的面积等级####
 getAreaLevel<-function(acCount){
   if(acCount<=2)

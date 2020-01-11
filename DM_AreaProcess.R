@@ -71,18 +71,22 @@ data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,
 # 切记最好应该统一处理！！
 # 思路
 # 1、对于能耗NA值，若该时刻的fullOnRatio==0，则置0
-data.hznu.area.predict.use[is.na(modiElec)&fullOnRatio==0]$modiElec<-0
+data.hznu.area.predict.raw[is.na(modiElec)&fullOnRatio==0]$modiElec<-0
+data.hznu.area.predict.raw[is.na(modiElec)]
 
-nn<-data.hznu.area.predict.use[date %in% unique(data.hznu.area.predict.use[is.na(modiElec)]$date)]
+nn<-data.hznu.area.predict.raw[date %in% unique(data.hznu.area.predict.raw[is.na(modiElec)]$date)]
 #还是有2017-01-28和2017-05-01缺失
 #考虑直接按小时的找一天能耗和气候相近的有着相同使用率的进行补全
-nn1<-data.hznu.area.predict.use[fullOnRatio>0.00328&fullOnRatio<0.003315&month(datetime)%in% c(1,5)&year(datetime)=="2017",1:8] %>% 
+nn1<-data.hznu.area.predict.raw[fullOnRatio>0.00328&fullOnRatio<0.003315&month(datetime)%in% c(1,5)&year(datetime)=="2017",
+                                c("date","datetime","fullOnRatio","modiElec")] %>% 
   mutate(.,hour=hour(datetime),month=month(datetime)) %>% as.data.table(.) %>%.[!duplicated(.)]
 
-data.hznu.area.predict.use[is.na(modiElec)]$modiElec<-apply(X = data.hznu.area.predict.use[is.na(modiElec),"datetime"],MARGIN = 1,
+data.hznu.area.predict.raw[is.na(modiElec)&substr(date,1,4)=="2017"]$modiElec<-apply(X = data.hznu.area.predict.raw[is.na(modiElec)&substr(date,1,4)=="2017","datetime"],MARGIN = 1,
                                                             FUN = function(x){
-                                                              mean(nn1[hour==hour(x)&month==month(x)]$modiElec,na.rm = TRUE)
+                                                              mean(nn1[hour==hour(as.POSIXct(x))&month==month(as.POSIXct(x))]$modiElec,na.rm = TRUE)
                                                             })
+
+
 
 ####加一些辅助变量####
 data.hznu.area.predict.raw<-data.hznu.area.predict.raw %>%
