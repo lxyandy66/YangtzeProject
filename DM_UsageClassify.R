@@ -75,7 +75,7 @@ stat.use.yearDist<-data.hznu.use.final[,.(usagePattern=clusterName[1],
 
 
 #转换为因子的预处理
-modeSelect<-"cooling"
+modeSelect<-"heating"
 data.hznu.use.final.modePickup<-data.hznu.use.final[finalState==modeSelect]#&modiSeason %in% c("Summer_warm","Transition" )]
 # > class(data.hznu.use.final.modePickup[,"h8"])
 # [1] "data.table" "data.frame"
@@ -93,6 +93,7 @@ data.hznu.use.final.modePickup$modiSeason<-as.factor(data.hznu.use.final.modePic
 stat.use.runtime<-boxplot(data = data.hznu.use.final,runtime~data.hznu.use.final$clusterName)
 data.hznu.use.final.modePickup$runtimeClass<-as.factor(sapply(data.hznu.use.final.modePickup$runtime,getRuntimeClass))
 # data.hznu.use.final.modePickup[clusterName=="halfDaytime"]$clusterName<-"daytime"
+
 
 ####训练集/测试集划分####
 set.seed(711)
@@ -114,6 +115,62 @@ confusionMatrix(table(rtree.predict,data.hznu.use.tree.test$clusterName))
 
 capture.output(c(confusionMatrix(table(rtree.predict,data.hznu.use.tree.test$clusterName)),asRules(tree.both)),
                file =paste("HZNU_行为_制冷_决策树评估_bestCP.txt"))
+
+
+####大论文用十折验证####
+# 思路：
+# 每一折均生成一棵树、每次循环记录生成的树
+# 将最高准确率的折所生成的树作为最终输出，总十折结果作为最终概率
+
+#构建数据记录表
+data.hznu.use.classify.log<-data.table(id=-999,datetime="2020-02-02",modiSeason="modiSeason",
+                                       target="targetResult,fullOnRatio,etc.",method="cart",setType="train/test",
+                                       round=-999,predValue=-999,realValue=-999)[-1]
+list.hznu.use.classify.cart<-list()
+
+data.hznu.use.final.modePickup$id<-c(1:nrow(data.hznu.use.final.modePickup))
+
+for(j in c(0:9)){
+    tree.both<-rpart(clusterName~modiSeason+runtime+h8+h9+h10+h11+h12
+                     +h13+h14+h15+h16+h17+h18
+                     +h19+h20+h21+h22,data=data.hznu.use.final.modePickup[id%%10!=j])
+    tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#最优剪枝
+    rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party" 
+    plot(rpartTrue2)
+    list.hznu.use.classify.cart[[modeSelect]][[as.character(j)]]<-tree.both
+    #测试集验证
+    cmResult<-
+      predictTest(testSet = data.hznu.use.final.modePickup[id%%10==j],resultValue = data.hznu.use.final.modePickup[id%%10==j]$clusterName,
+                  predictableModel = rpartTrue2)
+    # predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
+    #             predictableModel = rpartTrue2)
+    #结果输出
+    outputImg(rpartTrue2,hit=900,wid = 1600,fileName = paste("HZNU_UsageClassify_",modeSelect,"_fold_",j,".png",sep = ""))
+    outputValidRslt(cm=cmResult, fileName =  paste("HZNU_UsageClassify_",modeSelect,"_fold_",j,".txt",sep = ""),
+                    algoName = "CART",tree = tree.both , fmla = "clusterName~modiSeason+runtime+timeSeries", 
+                    logTitle =  paste("HZNU_UsageClassify_",modeSelect,"_fold_",j,sep = ""),
+                    other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
+    
+    #单独对十折的结果进行储存，此处为预测集
+    data.hznu.use.classify.log<-data.hznu.use.final.modePickup[id%%10==j]%>%
+      data.table(id=.$id,datetime=.$date,modiSeason=.$modiSeason,
+                 target=paste("usagePattern",modeSelect,sep = ""),method="CART",setType="test",
+                 round=j,predValue=as.character(predict(rpartTrue2,.)),realValue=.$clusterName)%>% .[,..archieveItem] %>% rbind(data.hznu.use.classify.log,.)
+    
+    #单独对十折的结果进行储存，此处为训练集
+    data.hznu.use.classify.log<-data.hznu.use.final.modePickup[id%%10!=j]%>%
+      data.table(id=.$id,datetime=.$date,modiSeason=.$modiSeason,
+                 target=paste("usagePattern",modeSelect,sep = ""),method="CART",setType="train",
+                 round=j,predValue=as.character(predict(rpartTrue2,.)),realValue=.$clusterName) %>% .[,..archieveItem] %>% rbind(data.hznu.use.classify.log,.)
+    
+    rm(tree.both,rpartTrue2,cmResult)
+}
+
+#将十折的结果验证其效果
+# usagePatterncooling usagePatternheating 
+# 125730               78720 
+nn<-data.hznu.use.classify.log[setType=="test"& target=="usagePatterncooling"]%>% .[complete.cases(.[,c("predValue","realValue")])] %>% as.data.table(.) 
+confusionMatrix(table(nn$predValue,nn$realValue))
 
 
 getRuntimeClass<-function(time){
