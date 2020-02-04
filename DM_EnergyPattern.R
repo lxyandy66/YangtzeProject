@@ -356,9 +356,11 @@ ggplot(data=data.hznu.teaching.energy.std[modiSeat!=0],
 
 #检查各教室的空调使用情况，使用强度与使用台数和面积的关系
 ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0&acIntensity<=1],aes(x=as.factor(modiSeat),y=acIntensity))+geom_boxplot(width=0.5)+
-  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/8,color="red",group=1,size=0.09),fun.y=mean,geom="point")+
-  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/8,group=1,color="red",size=0.08),fun.y=mean,geom="line")+
-  scale_y_continuous(sec.axis = sec_axis(~.*8,name = "meanAcUsed"))+facet_wrap(~finalState)+
+  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/16,color="red",group=1,size=0.09),fun.y=mean,geom="point")+
+  stat_summary(aes(x=as.factor(modiSeat),y=meanAcUsed/16,color="red",group=1,size=0.08),fun.y=mean,geom="line")+
+  # stat_summary(aes(x=as.factor(modiSeat),y=acCount/16,color="green",group=1,size=0.09),fun.y=mean,geom="point")+#这个空调数不要最好，相同规模的acCount在制冷制热中曲线不同
+  # stat_summary(aes(x=as.factor(modiSeat),y=acCount/16,color="green",group=1,size=0.08),fun.y=mean,geom="line")+
+  scale_y_continuous(sec.axis = sec_axis(~.*16,name = "meanAcUsed"))+facet_wrap(~finalState)+
   theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
   theme(axis.text=element_text(size=16),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
         legend.text = element_text(size=16))

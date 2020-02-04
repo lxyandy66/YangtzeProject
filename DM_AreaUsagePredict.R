@@ -42,6 +42,16 @@ boxplot.stats(data.hznu.area.predict.use$rlatTsErr)#4.578777e-05 1.217521e-01 3.
 mean(data.hznu.area.predict.use[!is.infinite(rlatTsErr)]$rlatTsErr,na.rm = TRUE)#0.5800756
 getRSquare(pred = data.hznu.area.predict.use$tsFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8631175
 
+####增加ARIMA的预测####
+fit.hznu.usage.arima<-auto.arima(ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,1,1,8),frequency = 15))
+data.hznu.area.predict.use$arimaFullOnRatio<-as.numeric(fit.hznu.usage.arima$fitted)
+data.hznu.area.predict.use[arimaFullOnRatio<0]$arimaFullOnRatio<-0
+#ARIMA效果评估
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$arimaFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.4144662
+RMSE(pred = data.hznu.area.predict.use$arimaFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01969339
+boxplot.stats((data.hznu.area.predict.use %>%abs((fullOnRatio-arimaFullOnRatio)/fullOnRatio)))#4.578777e-05 1.217521e-01 3.031872e-01 8.384903e-01 1.903394e+00
+getRSquare(pred = data.hznu.area.predict.use$arimaFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8954467
+
 
 #时刻记得是否一不留神重复了或者多出了行，尤其是需要针对必须唯一的key
 data.hznu.area.predict.use[duplicated(data.hznu.area.predict.use$datetime)]
@@ -222,7 +232,7 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log[target!="modiElec"]
 
 #
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")] %>% #,"svmInitPred","svmIterPred"
+ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","arimaFullOnRatio")] %>% #,"svmInitPred","svmIterPred""simpleKnnFullOnRatio","knnFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","year","date")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)+
   theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.88))
