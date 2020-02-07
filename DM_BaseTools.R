@@ -362,10 +362,40 @@ outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
 ####从数据框中获取特定时间间隔之后的数据####
 # thisTime: 当前时间, 时间点, 适用于apply
 # data: 数据框, 包含数据中时间列，目标值列
-getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl){
+# dailyStartTime: 每天的起始时间
+# dailyEndTime: 每天的结束时间
+# 若取到的时间间隔不符合时间范围，则按照getLegalTime获取符合范围的时间
+getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl,dailyStartTime=8,dailyEndTime=22){
   data<-as.data.table(data)
   targetTime<-as.POSIXct(thisTime)+timeInvl
+  if(!isLegalTime(targetTime)){
+    targetTime<-getLegalTime(thisTime,timeInvl)
+  }
   return(as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#data[.(targetTime),on= ..timeColName][..targetColName]#理论是可以的，但是on的传参传不进去
+}
+####修复获取时间间隔非法后应得到的合法时间####
+getLegalTime<-function(thisTime,timeInvl,dailyStartTime=8,dailyEndTime=22){
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  if(hour(targetTime) %in% c(dailyStartTime:dailyEndTime)){
+    #如果传进来的参数符合范围，直接返回
+    return(targetTime)
+  }
+  if(hour(targetTime)<dailyStartTime){
+    #目标时间早于一天中的下限，如目标时间为6点，日起始时间为8点，则取前一天结束时间
+    targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
+  }else{
+    #目标时间晚于一天中的下限则取当天下限
+    targetTime<-as.POSIXct(paste(format(targetTime,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
+  }
+  return(targetTime)
+}
+####检查时间是否在范围内####
+isLegalTime<-function(thisTime,dailyStartTime=8,dailyEndTime=22){
+  if(hour(thisTime) %in% c(dailyStartTime:dailyEndTime)){
+    return(TRUE)
+  }else{
+    return(FALSE)
+  }
 }
 
 #注意timeInvl是正值

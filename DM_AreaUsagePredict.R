@@ -29,13 +29,36 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
   data.hznu.area.predict.use[modiSeason==i]$stdWindSpeed<-normalize(data.hznu.area.predict.use[modiSeason==i]$windSpeed,upper = 0.9,lower = 0.1,intercept = 0.1)
 }
 
+data.hznu.area.predict.use$weekCount<-isoweek(data.hznu.area.predict.use$datetime)
+
+####大论文用时间筛选####
+paperTime<-list(Summer_warm=c(sprintf("2017-09-%02d",4:17)),
+                Summer=c(sprintf("2017-07-%02d",3:16)),
+                Winter_warm=c(sprintf("2017-12-%02d",11:24)),
+                Winter=c(sprintf("2018-01-%02d",15:28))
+                )
+
 ####时间序列构建####
 # ts.hznu.usage<-ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,01,01),frequency = 15)
-fit.ts.hznu.usage<-ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,1,1,8),frequency = 15) %>% ets(.,model="AAA")
+data.hznu.area.predict.use$tsRealFullOnRatio<-ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,1,1,8),frequency = 15)
+# fit.ts.hznu.usage<-ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,1,1,8),frequency = 15) %>% ets(.,model="AAA")
+fit.ts.hznu.usage<-data.hznu.area.predict.use$tsRealFullOnRatio %>% ets(.)#ETS(A,Ad,A) 
 data.hznu.area.predict.use$tsFullOnRatio<-as.numeric(fit.ts.hznu.usage$fitted)
 data.hznu.area.predict.use[tsFullOnRatio<0]$tsFullOnRatio<-0
+
+#季节性因素分解
+stl(ts(data.hznu.area.predict.use[date %in% paperTime$Winter]$fullOnRatio,start = c(2017,1,1,8),frequency = 15), s.window="period") %>% plot(.)
+
+
+####大论文用时间序列效果评估####
+data.hznu.area.predict.use[date %in% paperTime$Summer] %>% {
+  cat("MAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$knnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+  cat("\nRMSE\t",RMSE(pred = .$knnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE))#0.022
+  cat("\nRSquare\t",getRSquare(pred = .$knnFullOnRatio,ref = .$fullOnRatio))#0.8631175
+}
+# tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio
+
 #计算纯时间序列的相对误差
-data.hznu.area.predict.use$rlatTsErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$tsFullOnRatio)/data.hznu.area.predict.use$fullOnRatio)
 getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$tsFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.5800756
 RMSE(pred = data.hznu.area.predict.use$tsFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.022
 boxplot.stats(data.hznu.area.predict.use$rlatTsErr)#4.578777e-05 1.217521e-01 3.031872e-01 8.384903e-01 1.903394e+00
@@ -43,13 +66,13 @@ mean(data.hznu.area.predict.use[!is.infinite(rlatTsErr)]$rlatTsErr,na.rm = TRUE)
 getRSquare(pred = data.hznu.area.predict.use$tsFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8631175
 
 ####增加ARIMA的预测####
-fit.hznu.usage.arima<-auto.arima(ts(data.hznu.area.predict.use$fullOnRatio,start = c(2017,1,1,8),frequency = 15))
+fit.hznu.usage.arima<-auto.arima(data.hznu.area.predict.use$tsRealFullOnRatio)
 data.hznu.area.predict.use$arimaFullOnRatio<-as.numeric(fit.hznu.usage.arima$fitted)
 data.hznu.area.predict.use[arimaFullOnRatio<0]$arimaFullOnRatio<-0
 #ARIMA效果评估
 getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$arimaFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.4144662
 RMSE(pred = data.hznu.area.predict.use$arimaFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01969339
-boxplot.stats((data.hznu.area.predict.use %>%abs((fullOnRatio-arimaFullOnRatio)/fullOnRatio)))#4.578777e-05 1.217521e-01 3.031872e-01 8.384903e-01 1.903394e+00
+boxplot.stats(with(data.hznu.area.predict.use,{abs((fullOnRatio-arimaFullOnRatio)/fullOnRatio)}))#5.580084e-08 8.770985e-02 2.182933e-01 5.741867e-01 1.300477e+00
 getRSquare(pred = data.hznu.area.predict.use$arimaFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8954467
 
 
@@ -57,6 +80,7 @@ getRSquare(pred = data.hznu.area.predict.use$arimaFullOnRatio,ref = data.hznu.ar
 data.hznu.area.predict.use[duplicated(data.hznu.area.predict.use$datetime)]
 
 ####对于十折的结果进行单独储存####
+backup.hznu.area.predict.log<-data.hznu.area.predict.log
 data.hznu.area.predict.log<-data.table(id=-999,datetime=as.POSIXct("2019-01-09"),modiSeason="modiSeason",
                                        target="targetResult,fullOnRatio,etc.",method="knn/svm/etc",setType="train/test",
                                        round=-999,predValue=-999,realValue=-999)[-1]
@@ -69,13 +93,9 @@ data.hznu.area.predict.use<-as.data.table(cbind(id=1:nrow(data.hznu.area.predict
                             mutate(.,knnFullOnRatio=-999,simpleKnnFullOnRatio= -999)
 
 
-data.hznu.area.predict.use$simpleKnnFullOnRatio<- -999
+data.hznu.area.predict.use$knnFullOnRatio<- -999
 # "stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"
 
-c("datetime","weekday","stdModiElec","modiSeason",
-  "d0h1_FullOnRatio","d1h0_FullOnRatio","d7h0_FullOnRatio",
-  "d1_onDemandRatio","d1_forenoonRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio",
-  "d7_onDemandRatio","d7_daytimeRatio","d7_afternoonRatio","d7_lateDaytimeRatio")
 
 predictUsageAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"),
                        Winter=c("d1h0_FullOnRatio","d1_onDemandRatio","d1_forenoonRatio","d1_daytimeRatio","d7_onDemandRatio","d7_daytimeRatio"),
@@ -94,23 +114,20 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
                   train = data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   test = data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]
                   )
-    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$simpleKnnFullOnRatio<-fit.kknn$fitted.values
+    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$knnFullOnRatio<-fit.kknn$fitted.values
     #单独对十折的结果进行储存
     data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
       data.table(id=.$id,datetime=.$datetime,modiSeason=i,
-                 target="fullOnRatio",method="simpleKnn",setType="test",
-                 round=j,predValue=.$simpleKnnFullOnRatio,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+                 target="fullOnRatio",method="knnFull",setType="test",
+                 round=j,predValue=.$knnFullOnRatio,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
   }
 }
 data.hznu.area.predict.use[knnFullOnRatio== -999]$knnFullOnRatio<-NA
 data.hznu.area.predict.use[simpleKnnFullOnRatio== -999]$simpleKnnFullOnRatio<-NA
 #考虑一下knn的基本误差
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$knnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.354
-data.hznu.area.predict.use$rlatKnnErr<-abs((data.hznu.area.predict.use$fullOnRatio-data.hznu.area.predict.use$knnFullOnRatio)/data.hznu.area.predict.use$fullOnRatio)
-RMSE(pred = data.hznu.area.predict.use$knnFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01812446
-boxplot.stats(data.hznu.area.predict.use$rlatKnnErr)#0.00000000 0.07528927 0.17103858 0.38354152 0.84391688
-mean(data.hznu.area.predict.use[!is.infinite(rlatKnnErr)]$rlatKnnErr,na.rm = TRUE)#0.3537018
-getRSquare(pred = data.hznu.area.predict.use$knnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.9071937
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$knnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.3671775
+RMSE(pred = data.hznu.area.predict.use$knnFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01942089
+getRSquare(pred = data.hznu.area.predict.use$knnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8896168
 
 #考虑一下简化knn的基本误差
 getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.942
@@ -121,10 +138,10 @@ mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr
 getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.485979
 
 # constKnn
-# MAPE 0.3859385
-# RMSE 0.01850447
+# MAPE 0.4115363
+# RMSE 0.02068903
 # box.stat NA
-# R-square 0.9027073
+# R-square 0.8737832
 
 
 ####SVM进行预测####
@@ -230,9 +247,18 @@ getRSquare(pred = data.hznu.area.predict.use$svmIterPred,ref = data.hznu.area.pr
 
 backup.hznu.area.predict.log<-data.hznu.area.predict.log[target!="modiElec"]
 
-#
+####绘图输出####
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-12-0",c("datetime","fullOnRatio","arimaFullOnRatio")] %>% #,"svmInitPred","svmIterPred""simpleKnnFullOnRatio","knnFullOnRatio"
-         mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","year","date")),
-       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~year,nrow = 2)+
-  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.88))
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","tsFullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")] %>% #,"svmInitPred","svmIterPred","svmIterPred""simpleKnnFullOnRatio","knnFullOnRatio"
+         mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
+  theme_bw()+theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.90))
+#一定注意这个group参数，很有用，此处直接将分组变为了日期与方法
+
+
+
+
+
+
+
+

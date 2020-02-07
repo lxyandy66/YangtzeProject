@@ -125,6 +125,10 @@ for(i in c(0,1,2,7)){#0天，1天，2天，7天前
   }
 }
 
+nn<-data.table(d0h1FRraw=backup.hznu.area.signCheck$d0h1_FullOnRatio,d0h1FRnew=data.hznu.area.signCheck$d0h1_FullOnRatio,
+               d0h1elecRaw=backup.hznu.area.signCheck$d0h1_modiElec,d0h1elecNew=data.hznu.area.signCheck$d0h1_modiElec)
+nn[is.na(d0h1FRnew)]
+
 ####加入各能耗模式占比####
 temp.hznu.area.energyPattern<-data.hznu.teaching.energy.std[,.(count=length(labelRoomDay),
                                                                lowEnergyRatio=length(labelRoomDay[energyClusterName=="LowEnergy"])/length(labelRoomDay),
