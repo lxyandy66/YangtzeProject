@@ -381,8 +381,16 @@ getLegalTime<-function(thisTime,timeInvl,dailyStartTime=8,dailyEndTime=22){
     return(targetTime)
   }
   if(hour(targetTime)<dailyStartTime){
-    #目标时间早于一天中的下限，如目标时间为6点，日起始时间为8点，则取前一天结束时间
-    targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
+    # 目标时间早于一天中的下限，如目标时间为6点，日起始时间为8点，则检查thisTime的小时是否合法
+    # 若合法，则选取目标时间的日期与thistime的小时
+    # 若仍非法，则返回日起始时间
+    tempTargetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",hour(thisTime))))
+    if(isLegalTime(tempTargetTime)){
+      return(tempTargetTime)
+    }else{
+      targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyStartTime)))
+      return(targetTime)
+    }
   }else{
     #目标时间晚于一天中的下限则取当天下限
     targetTime<-as.POSIXct(paste(format(targetTime,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))

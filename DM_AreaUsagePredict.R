@@ -51,10 +51,10 @@ stl(ts(data.hznu.area.predict.use[date %in% paperTime$Winter]$fullOnRatio,start 
 
 
 ####大论文用时间序列效果评估####
-data.hznu.area.predict.use[date %in% paperTime$Summer] %>% {
-  cat("MAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$knnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
-  cat("\nRMSE\t",RMSE(pred = .$knnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE))#0.022
-  cat("\nRSquare\t",getRSquare(pred = .$knnFullOnRatio,ref = .$fullOnRatio))#0.8631175
+data.hznu.area.predict.use[date %in% paperTime$Summer_warm] %>% {
+  cat("MAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+  cat("\nRMSE\t",RMSE(pred = .$simpleKnnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE))#0.022
+  cat("\nRSquare\t",getRSquare(pred = .$simpleKnnFullOnRatio,ref = .$fullOnRatio))#0.8631175
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio
 
@@ -105,29 +105,31 @@ predictUsageAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","d
                        Summer=c("stdWindSpeed","d1h0_FullOnRatio","d7_onDemandRatio","d7_daytimeRatio"))
 
 data.hznu.area.predict.use<-as.data.table(data.hznu.area.predict.use)
+cat( system.time(
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   for(j in 0:9){
     #根据id mod 10 来确定交叉验证的划分
-    seasonalAttr<-c(predictUsageAttr[["constant"]])#,predictUsageAttr[[i]]
+    seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]])#,predictUsageAttr[[i]]
     fit.kknn<-kknn(formula = as.formula( paste("fullOnRatio ~ ",paste(seasonalAttr,collapse = "+") ) ),
                   kernel = "optimal",k=10,na.action = na.exclude,
                   train = data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
                   test = data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]
                   )
-    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$knnFullOnRatio<-fit.kknn$fitted.values
+    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$simpleKnnFullOnRatio<-fit.kknn$fitted.values
     #单独对十折的结果进行储存
     data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
       data.table(id=.$id,datetime=.$datetime,modiSeason=i,
-                 target="fullOnRatio",method="knnFull",setType="test",
+                 target="fullOnRatio",method="simpleKnn",setType="test",
                  round=j,predValue=.$knnFullOnRatio,realValue=.$fullOnRatio)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
   }
 }
+) )
 data.hznu.area.predict.use[knnFullOnRatio== -999]$knnFullOnRatio<-NA
 data.hznu.area.predict.use[simpleKnnFullOnRatio== -999]$simpleKnnFullOnRatio<-NA
 #考虑一下knn的基本误差
-getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$knnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.3671775
-RMSE(pred = data.hznu.area.predict.use$knnFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.01942089
-getRSquare(pred = data.hznu.area.predict.use$knnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8896168
+getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$knnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)# 0.3738909
+RMSE(pred = data.hznu.area.predict.use$knnFullOnRatio,obs = data.hznu.area.predict.use$fullOnRatio,na.rm = TRUE)#0.0195318
+getRSquare(pred = data.hznu.area.predict.use$knnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.8899948
 
 #考虑一下简化knn的基本误差
 getMAPE(yPred = data.hznu.area.predict.use[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = data.hznu.area.predict.use[fullOnRatio!=0]$fullOnRatio)#0.942
@@ -138,10 +140,10 @@ mean(data.hznu.area.predict.use[!is.infinite(rlatSimpleKnnErr)]$rlatSimpleKnnErr
 getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hznu.area.predict.use$fullOnRatio)#0.485979
 
 # constKnn
-# MAPE 0.4115363
-# RMSE 0.02068903
+# MAPE 0.4097041
+# RMSE 0.02042152
 # box.stat NA
-# R-square 0.8737832
+# R-square 0.8793941
 
 
 ####SVM进行预测####
@@ -249,13 +251,17 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log[target!="modiElec"]
 
 ####绘图输出####
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","tsFullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")] %>% #,"svmInitPred","svmIterPred","svmIterPred""simpleKnnFullOnRatio","knnFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio","tsFullOnRatio")] %>% #,"svmInitPred","svmIterPred","svmIterPred"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
-  theme_bw()+theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.90))
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.8))
 #一定注意这个group参数，很有用，此处直接将分组变为了日期与方法
 
-
+nn<-data.hznu.area.predict.use[date %in% paperTime$Winter,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio","tsFullOnRatio")] %>% #,"svmInitPred","svmIterPred","svmIterPred""simpleKnnFullOnRatio","knnFullOnRatio"
+  mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount"))%>%as.data.table()
+ggplot(data=nn,
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.2,0.8))
 
 
 
