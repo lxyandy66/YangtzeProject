@@ -18,12 +18,12 @@ data.plfm.office.raw$labelTypeModeDate<-paste(data.plfm.office.raw$roomType,data
 data.plfm.office.raw$runtime<-apply(data.plfm.office.raw[,c(sprintf("h%d",0:23))],MARGIN = 1,FUN = sum,na.rm=TRUE)
 
 set.seed(711)
-data.plfm.office.select<-data.plfm.office.raw[finalState=="H"&runtime!=0]
+data.plfm.office.select<-data.plfm.office.raw[finalState=="C"&runtime!=0]
 wssClusterEvaluate(data.plfm.office.select[,c(sprintf("h%d",0:23))],maxK = 15)
 pamkClusterEvaluate(data=data.plfm.office.select[,c(sprintf("h%d",0:23))],endK = 15,criter = "asw")
 pamk(data.plfm.office.select[,c(sprintf("h%d",0:23))],krange = 2:10,criterion = "ch",critout = TRUE,usepam = TRUE)
 
-data.plfm.office.select$cluster<-pamk(data.plfm.office.select[,c(sprintf("h%d",0:23))],krange = 3,criterion = "ch",critout = TRUE,usepam = TRUE)$pamobject$clustering
+data.plfm.office.select$cluster<-pamk(data.plfm.office.select[,c(sprintf("h%d",0:23))],krange = 4,criterion = "ch",critout = TRUE,usepam = TRUE)$pamobject$clustering
 data.plfm.office.select.eva<-data.plfm.office.select[,.(finalState=finalState[1],
                                                         count=length(labelTypeModeDate),
                                                         runtime=mean(runtime,na.rm = TRUE),
@@ -54,6 +54,25 @@ data.plfm.office.select.eva<-data.plfm.office.select[,.(finalState=finalState[1]
                                                         ),by=cluster]#其实用reshape包会更好，但是label要调所以懒得管了
 write.xlsx(data.plfm.office.select.eva,file="PLFM_office_use_heating_cluster.xlsx")
 
+data.plfm.office.select$modiSeason<-apply(data.plfm.office.select[,c("date")],MARGIN = 1,
+                                          FUN = function(x){
+                                            nn<-getSeason(as.numeric(substr(x,6,7)))
+                                            if(!nn %in% c("Spring","Autumn"))
+                                              return(nn)
+                                            else
+                                              return("Transition")
+                                          })
+data.plfm.office.select$season<-apply(data.plfm.office.select[,c("date")],MARGIN = 1,
+                                          FUN = function(x){
+                                            getSeason(as.numeric(substr(x,6,7)))
+                                          })
+
+data.plfm.office.select%>% .[,.(count=length(date),
+                                modiSeason=modiSeason[1],
+                                usagePattern=cluster[1],
+                                runtime=mean(runtime,na.rm = TRUE)
+                                ),by=(labelSeasonUsage=paste(modiSeason,cluster,sep = "_"))]%>%
+  write.xlsx(.,file = "cooling_PLFM_office_usageDist.xlsx")
 ####决策树用模式识别####
 ####训练集/测试集划分####
 set.seed(711)
