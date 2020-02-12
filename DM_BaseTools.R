@@ -358,6 +358,90 @@ outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
   dev.off()
 }
 
+####确定目标时间####
+# 支持根据flag确认，例如是否工作日的flag
+getTargetTime<-function(thisTime,beforeHour,beforeDay,data,timeColName,expFlag=NA,flagColName=NA,dailyStartTime=8,dailyEndTime=22){
+  expFlag<-as.logical(expFlag)
+  
+  if(xor(is.na(flagColName),is.na(expFlag))){
+    #flagColName和expFlag必须同时存在或同时不存在
+    stop("flagColName and expFlag must co-exist")
+    }
+  
+  data<-as.data.table(data)
+  thisTime<-as.POSIXct(thisTime)
+  targetTime<-as.POSIXct(thisTime)-beforeHour*3600-beforeDay*3600*24
+  
+  #仅确定现在时间是否合法
+  if(!isLegalTime(targetTime)){
+    targetTime<-getLegalTime(targetTime,timeInvl = 0)#相当于直接传入targetTime自身
+  }
+  
+  if(!is.na(flagColName)|is.na(expFlag)){
+    #expFlag存在，需要按照其进行判断
+    if(! (targetTime %in% pull(data,timeColName))){##这个数据框降级变成向量的操作真是不友好
+      return(NA)#目标时间不在数据表中，表明已经越界
+    } 
+    targetFlag<-pull(data[.(targetTime),on=c(timeColName)],flagColName)[1]
+    if (targetFlag!=expFlag) {
+      #如果不是目标日类型，则一天一天向前回溯直至目标日类型或超出界限
+      return(getTargetTime(thisTime=as.POSIXct(targetTime),beforeHour = 0,beforeDay = 1,
+                    data = data,timeColName=timeColName,flagColName=flagColName,expFlag=expFlag))
+    }
+  }
+  return(targetTime)
+}
+
+
+####从数据框中获取特定时间间隔之后的数据####
+# thisTime: 当前时间, 时间点, 适用于apply
+# data: 数据框, 包含数据中时间列，目标值列
+# dailyStartTime: 每天的起始时间
+# dailyEndTime: 每天的结束时间
+# 若取到的时间间隔不符合时间范围，则按照getLegalTime获取符合范围的时间
+getIntervalTimeData<-function(thisTime,data,timeColName,targetColName,
+                              beforeHour,beforeDay,expFlag=NA,flagColName=NA,
+                              dailyStartTime=8,dailyEndTime=22){
+  thisExpFlag<-as.logical(expFlag)
+  if( xor(is.na(flagColName),is.na(thisExpFlag)) )#flagColName和expFlag必须同时存在或同时不存在
+    stop("flagColName and expFlag must co-exist")
+  data<-as.data.table(data)
+  targetTime<-getTargetTime(thisTime,beforeHour,beforeDay,data,timeColName,expFlag=thisExpFlag,flagColName=flagColName)
+  return(pull(data[.(targetTime),on=c(timeColName)],targetColName)[1])
+    # as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#data[.(targetTime),on= ..timeColName][..targetColName]#理论是可以的，但是on的传参传不进去
+}
+
+
+####确定目标时间####
+#勿用！
+getTargetDate<-function(thisTime,data,timeInvl,timeColName,flagColName=NA,expFlag=NA,dailyStartTime=8,dailyEndTime=22){
+  warning("This function is Deprecated, use getTargetTime instead",immediate. = TRUE)
+  if( xor(is.na(flagColName),is.na(expFlag)) )#flagColName和expFlag必须同时存在或同时不存在
+    stop("flagColName and expFlag must co-exist")
+  data<-as.data.table(data)
+  thisTime<-as.POSIXct(thisTime)
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  
+  if(! (targetTime %in% as.POSIXct(as.vector(as.matrix(data[,..timeColName]))))) ##这个数据框降级变成向量的操作真是不友好
+    return(NA)#目标时间不在数据表中，表明已经越界
+  
+  if(is.na(flagColName)|is.na(expFlag)){
+    #不需要标识为，即不需要同类型的日期
+    if(isLegalTime(targetTime,dailyStartTime=dailyStartTime,dailyEndTime=dailyEndTime)){
+      return(targetTime)
+    }else{
+      getLegalTime(thisTime,timeInvl,dailyStartTime=dailyStartTime,dailyEndTime=dailyEndTime)
+    }
+  }
+    #如果标志列为空，则说明无需参考标志，直接返回targetTime
+  
+  targetFlag<-as.logical(data[.(format(targetTime)),on=c(timeColName)][1,..flagColName])###注意这个format，可能存在格式不同
+  if(targetFlag==expFlag){
+    return(targetTime)#如果目标时间的标志位符合，则命中返回。
+  }else{
+    getTargetDate(thisTime=as.POSIXct(targetTime),data = data,timeColName=timeColName,flagColName=flagColName,timeInvl=timeInvl,expFlag=expFlag)
+  }
+}
 
 ####从数据框中获取特定时间间隔之后的数据####
 # thisTime: 当前时间, 时间点, 适用于apply
@@ -366,6 +450,7 @@ outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
 # dailyEndTime: 每天的结束时间
 # 若取到的时间间隔不符合时间范围，则按照getLegalTime获取符合范围的时间
 getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl,dailyStartTime=8,dailyEndTime=22){
+  warning("This function is Deprecated, use getIntervalTimeData instead",immediate. = TRUE)
   data<-as.data.table(data)
   targetTime<-as.POSIXct(thisTime)+timeInvl
   if(!isLegalTime(targetTime)){
@@ -373,30 +458,8 @@ getIntervalData<-function(thisTime,data,timeColName,targetColName,timeInvl,daily
   }
   return(as.numeric(data[.(targetTime),on=c(timeColName)][1,..targetColName]))#data[.(targetTime),on= ..timeColName][..targetColName]#理论是可以的，但是on的传参传不进去
 }
-####修复获取时间间隔非法后应得到的合法时间####
-getLegalTime<-function(thisTime,timeInvl,dailyStartTime=8,dailyEndTime=22){
-  targetTime<-as.POSIXct(thisTime)+timeInvl
-  if(hour(targetTime) %in% c(dailyStartTime:dailyEndTime)){
-    #如果传进来的参数符合范围，直接返回
-    return(targetTime)
-  }
-  if(hour(targetTime)<dailyStartTime){
-    # 目标时间早于一天中的下限，如目标时间为6点，日起始时间为8点，则检查thisTime的小时是否合法
-    # 若合法，则选取目标时间的日期与thistime的小时
-    # 若仍非法，则返回日起始时间
-    tempTargetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",hour(thisTime))))
-    if(isLegalTime(tempTargetTime)){
-      return(tempTargetTime)
-    }else{
-      targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyStartTime)))
-      return(targetTime)
-    }
-  }else{
-    #目标时间晚于一天中的下限则取当天下限
-    targetTime<-as.POSIXct(paste(format(targetTime,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
-  }
-  return(targetTime)
-}
+
+
 ####检查时间是否在范围内####
 isLegalTime<-function(thisTime,dailyStartTime=8,dailyEndTime=22){
   if(hour(thisTime) %in% c(dailyStartTime:dailyEndTime)){
@@ -405,6 +468,37 @@ isLegalTime<-function(thisTime,dailyStartTime=8,dailyEndTime=22){
     return(FALSE)
   }
 }
+
+####修复获取时间间隔非法后应得到的合法时间####
+getLegalTime<-function(thisTime,timeInvl,dailyStartTime=8,dailyEndTime=22){
+  targetTime<-as.POSIXct(thisTime)+timeInvl
+  if(hour(targetTime) %in% c(dailyStartTime:dailyEndTime)){
+    #如果传进来的参数符合范围，直接返回
+    return(targetTime)
+  }
+  if(hour(targetTime)<dailyStartTime){
+    # 目标时间早于一天中的下限，如目标时间为6点，日起始时间为8点，返回前一天的结束时间
+    targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
+    
+    # # 则检查thisTime的小时是否合法
+    # # 若合法，则选取目标时间的日期与thistime的小时
+    # # 若仍非法，则返回日起始时间 #这样不可
+    # tempTargetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",hour(thisTime))))
+    # if(isLegalTime(tempTargetTime)){
+    #   return(tempTargetTime)
+    # }else{
+    #   targetTime<-as.POSIXct(paste(format(targetTime-24*3600,"%Y-%m-%d"),sprintf("%02d:00:00",dailyStartTime)))
+    #   return(targetTime)
+    # }
+  }else{
+    #目标时间晚于一天中的下限则取当天下限
+    targetTime<-as.POSIXct(paste(format(targetTime,"%Y-%m-%d"),sprintf("%02d:00:00",dailyEndTime)))
+  }
+  return(targetTime)
+}
+
+
+
 
 #注意timeInvl是正值
 getPreviousCataData<-function(thisTime,data,timeColName,targetColName,flagColName,timeInvl,expFlag){
@@ -420,23 +514,4 @@ getPreviousCataData<-function(thisTime,data,timeColName,targetColName,flagColNam
   }
 }
 
-getTargetDate<-function(thisTime,data,timeColName,flagColName=NA,expFlag=NA,timeInvl){
-  if( xor(is.na(flagColName),is.na(expFlag)) )#flagColName和expFlag必须同时存在或同时不存在
-    stop("flagColName and expFlag must co-exist")
-  data<-as.data.table(data)
-  thisTime<-as.POSIXct(thisTime)
-  targetTime<-as.POSIXct(thisTime)+timeInvl
-  
-  if(! (targetTime %in% as.POSIXct(as.vector(as.matrix(data[,..timeColName]))))) ##这个数据框降级变成向量的操作真是不友好
-    return(NA)#目标时间不在数据表中，表明已经越界
-  
-  if(is.na(flagColName)|is.na(expFlag))
-    return(targetTime)#如果标志列为空，则说明无需参考标志，直接返回targetTime
-  
-  targetFlag<-as.logical(data[.(format(targetTime)),on=c(timeColName)][1,..flagColName])###注意这个format，可能存在格式不同
-  if(targetFlag==expFlag){
-    return(targetTime)#如果目标时间的标志位符合，则命中返回。
-  }else{
-    getTargetDate(thisTime=as.POSIXct(targetTime),data = data,timeColName=timeColName,flagColName=flagColName,timeInvl=timeInvl,expFlag=expFlag)
-  }
-}
+

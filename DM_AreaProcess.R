@@ -112,18 +112,29 @@ data.hznu.area.signCheck$r1h0_modiElec<-apply(X = data.hznu.area.signCheck[,c("d
 for(i in c(0,1,2,7)){#0天，1天，2天，7天前
   for(j in c(0,1,2)){#
     if(!(i==0&j==0)){#i,j即天和小时不同时为0
-      data.hznu.area.signCheck[,paste("d",i,"h",j,"_FullOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
-                                                                                   FUN = getIntervalData,
-                                                                                   data=data.hznu.area.signCheck,timeColName="datetime",targetColName="fullOnRatio",timeInvl=-i*24*3600-j*3600)
-      # data.hznu.area.signCheck[,paste("d",i,"h",j,"_DayOnRatio",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
-      #                                                                             FUN = getIntervalData,
-      #                                                                             data=data.hznu.area.signCheck,timeColName="datetime",targetColName="dayOnRatio",timeInvl=-i*24*3600-j*3600)
-      data.hznu.area.signCheck[,paste("d",i,"h",j,"_modiElec",sep = "")]<-apply(X=data.hznu.area.signCheck[,"datetime"], MARGIN = 1, 
-                                                                                FUN = getIntervalData,
-                                                                                data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",timeInvl=-i*24*3600-j*3600)
+      cat(i,j,"\n")
+      data.hznu.area.signCheck[,paste("d",i,"h",j,"_FullOnRatio",sep = "")]<-
+        apply(X=data.hznu.area.signCheck[,c("datetime","isBizday")], MARGIN = 1,
+              FUN = function(x){
+                getIntervalTimeData(thisTime = x[1],beforeDay = i,beforeHour = j,timeColName = "datetime",
+                                    targetColName = "fullOnRatio",expFlag = gsub(" ","",x[2]),flagColName = "isBizday",data = data.hznu.area.signCheck)})
+      
+      data.hznu.area.signCheck[,paste("d",i,"h",j,"_modiElec",sep = "")]<-
+        apply(X=data.hznu.area.signCheck[,c("datetime","isBizday")], MARGIN = 1,
+              FUN = function(x){
+                getIntervalTimeData(thisTime = x[1],beforeDay = i,beforeHour = j,timeColName = "datetime",
+                                    targetColName = "modiElec",expFlag = gsub(" ","",x[2]),flagColName = "isBizday",data = data.hznu.area.signCheck)})
     }
   }
 }
+
+#获取前一小时的参考时间
+# 准备进行日起始时刻的处理
+data.hznu.area.signCheck$refHour1<-apply(X=data.hznu.area.signCheck[,c("datetime","isBizday")], MARGIN = 1,
+                                        FUN = function(x){
+                                          getTargetTime(thisTime = x[1],beforeHour = 1,beforeDay = 0,data = data.hznu.area.signCheck,
+                                                        timeColName = "datetime",expFlag = as.logical(gsub(" ","",x[2])),flagColName = "isBizday")
+                                        }) %>% as.POSIXct(.)
 
 nn<-data.table(d0h1FRraw=backup.hznu.area.signCheck$d0h1_FullOnRatio,d0h1FRnew=data.hznu.area.signCheck$d0h1_FullOnRatio,
                d0h1elecRaw=backup.hznu.area.signCheck$d0h1_modiElec,d0h1elecNew=data.hznu.area.signCheck$d0h1_modiElec)
@@ -200,13 +211,7 @@ signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday")
                energyPatternRatio=c(paste(c(rep("d1_",4),rep("d7_",4)),energyPatternRatioName,sep = ""))#rep("r1_",4),
                )#rep("r1_",6),
 
-# for(i in signAttr$patternRatio){
-#   data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
-#                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -24*3600)
-#   data.hznu.area.signCheck[,c(paste(i,"_org",sep = ""))]<-apply(data.hznu.area.signCheck[,"datetime"], MARGIN = 1,
-#                                                                 FUN = getIntervalData,data=data.hznu.area.signCheck,timeColName="datetime",targetColName=i,timeInvl= -7*24*3600)
-# }#这一段算法不好，太慢了，肯定不能直接按对象来，直接按天来会好得多
-#我是个傻*吗...这个明显不对的东西
+
 data.hznu.area.signCheck[,c(paste(signAttr$patternRatio,"_org",sep = ""))]<-NULL
 
 #取历史模式相关数据
