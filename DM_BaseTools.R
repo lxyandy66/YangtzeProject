@@ -360,33 +360,39 @@ outputImg<-function(plottable,hit,wid,fileName,FUN=NA){
 
 ####确定目标时间####
 # 支持根据flag确认，例如是否工作日的flag
-getTargetTime<-function(thisTime,beforeHour,beforeDay,data,timeColName,expFlag=NA,flagColName=NA,dailyStartTime=8,dailyEndTime=22){
+getTargetTime<-function(thisTime,beforeHour,beforeDay,data,timeColName,expFlag=NA,flagColName=NA,dailyStartTime=8,dailyEndTime=22,byDate=FALSE){
   expFlag<-as.logical(expFlag)
-  
   if(xor(is.na(flagColName),is.na(expFlag))){
     #flagColName和expFlag必须同时存在或同时不存在
     stop("flagColName and expFlag must co-exist")
     }
-  
+  # browser()
   data<-as.data.table(data)
   thisTime<-as.POSIXct(thisTime)
   targetTime<-as.POSIXct(thisTime)-beforeHour*3600-beforeDay*3600*24
   
-  #仅确定现在时间是否合法
-  if(!isLegalTime(targetTime)){
+  #仅确定现在时间是否合法，对按日期，即byDate=TRUE不检测
+  if(!byDate&!isLegalTime(targetTime)){
     targetTime<-getLegalTime(targetTime,timeInvl = 0)#相当于直接传入targetTime自身
   }
   
   if(!is.na(flagColName)|is.na(expFlag)){
     #expFlag存在，需要按照其进行判断
-    if(! (targetTime %in% pull(data,timeColName))){##这个数据框降级变成向量的操作真是不友好
-      return(NA)#目标时间不在数据表中，表明已经越界
-    } 
-    targetFlag<-pull(data[.(targetTime),on=c(timeColName)],flagColName)[1]
+    if(byDate){
+      if(! (format(targetTime,format="%Y-%m-%d")%in% pull(data,timeColName))){##这个数据框降级变成向量的操作真是不友好
+        return(NA)#目标时间不在数据表中，表明已经越界
+      }
+      targetFlag<-pull(data[.(format(targetTime,format="%Y-%m-%d")),on=c(timeColName)],flagColName)[1]
+    }else{
+      if(! (targetTime %in% pull(data,timeColName))){##这个数据框降级变成向量的操作真是不友好
+        return(NA)#目标时间不在数据表中，表明已经越界
+      } 
+      targetFlag<-pull(data[.(targetTime),on=c(timeColName)],flagColName)[1]
+    }
     if (targetFlag!=expFlag) {
       #如果不是目标日类型，则一天一天向前回溯直至目标日类型或超出界限
       return(getTargetTime(thisTime=as.POSIXct(targetTime),beforeHour = 0,beforeDay = 1,
-                    data = data,timeColName=timeColName,flagColName=flagColName,expFlag=expFlag))
+                    data = data,timeColName=timeColName,flagColName=flagColName,expFlag=expFlag,byDate=byDate))
     }
   }
   return(targetTime)

@@ -101,6 +101,7 @@ data.hznu.area.predict.raw[is.na(isBizday)]$isBizday<-data.hznu.area.predict.raw
 
 ####单独取出数据集进行显著性测试####
 data.hznu.area.signCheck<-data.hznu.area.predict.raw[,c("datetime","date","fullOnRatio","modiElec","outTemp","rhOut","windSpeed","dayOnCount","isBizday")]
+data.hznu.area.signCheck$hour<-hour(data.hznu.area.signCheck$datetime)
 data.hznu.area.signCheck$r1h0_FullOnRatio<-apply(X = data.hznu.area.signCheck[,c("datetime","isBizday")],MARGIN = 1,
                                                  FUN = function(x){
                                                    getPreviousDate(thisTime = x[1],expFlag = as.logical(gsub(" ","",x[2])),
@@ -109,6 +110,7 @@ data.hznu.area.signCheck$r1h0_modiElec<-apply(X = data.hznu.area.signCheck[,c("d
                                                  FUN = function(x){
                                                    getPreviousDate(thisTime = x[1],expFlag = as.logical(gsub(" ","",x[2])),
                                                                    data=data.hznu.area.signCheck,timeColName="datetime",targetColName="modiElec",flagColName="isBizday",timeInvl= -24*3600)})
+#####切记！这玩意跑的贼慢
 for(i in c(0,1,2,7)){#0天，1天，2天，7天前
   for(j in c(0,1,2)){#
     if(!(i==0&j==0)){#i,j即天和小时不同时为0
@@ -136,9 +138,19 @@ data.hznu.area.signCheck$refHour1<-apply(X=data.hznu.area.signCheck[,c("datetime
                                                         timeColName = "datetime",expFlag = as.logical(gsub(" ","",x[2])),flagColName = "isBizday")
                                         }) %>% as.POSIXct(.)
 
-nn<-data.table(d0h1FRraw=backup.hznu.area.signCheck$d0h1_FullOnRatio,d0h1FRnew=data.hznu.area.signCheck$d0h1_FullOnRatio,
-               d0h1elecRaw=backup.hznu.area.signCheck$d0h1_modiElec,d0h1elecNew=data.hznu.area.signCheck$d0h1_modiElec)
-nn[is.na(d0h1FRnew)]
+
+# 修正d0h1对于日起始小时的问题
+data.hznu.area.signCheck$back_d0h1fullOnRatio<-data.hznu.area.signCheck$d0h1_FullOnRatio
+data.hznu.area.signCheck$back_d0h1ModiElec<-data.hznu.area.signCheck$d0h1_modiElec
+data.hznu.area.signCheck[hour==8]$d0h1_FullOnRatio<-apply(data.hznu.area.signCheck[hour==8,c("refHour1")],MARGIN = 1,
+                                                          FUN = function(x){
+                                                            return(mean(data.hznu.area.signCheck[date==substr(x,1,10)]$fullOnRatio,na.rm = TRUE))
+                                                          })
+data.hznu.area.signCheck[hour==8]$d0h1_modiElec<-apply(data.hznu.area.signCheck[hour==8,c("refHour1")],MARGIN = 1,
+                                                          FUN = function(x){
+                                                            return(mean(data.hznu.area.signCheck[date==substr(x,1,10)]$modiElec,na.rm = TRUE))
+                                                          })
+
 
 ####加入各能耗模式占比####
 temp.hznu.area.energyPattern<-data.hznu.teaching.energy.std[,.(count=length(labelRoomDay),
@@ -216,38 +228,66 @@ data.hznu.area.signCheck[,c(paste(signAttr$patternRatio,"_org",sep = ""))]<-NULL
 
 #取历史模式相关数据
 for(i in unique(data.hznu.area.signCheck$date)){
-  ##取前一个参考天
-  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
-                                       timeColName = "date",flagColName = "isBizday",
-                                       expFlag = data.hznu.area.signCheck[date==i]$isBizday[1],timeInvl = -24*3600))
-  #取行为模式
-  data.hznu.area.signCheck[date==i,c(paste(rep("r1_",6),patternRatioName,sep = ""))]<-
-    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
-  #取能耗模式
-  data.hznu.area.signCheck[date==i,c(paste(rep("r1_",4),energyPatternRatioName,sep = ""))]<-
-    data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
+  # ##取前一个参考天
+  # targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
+  #                                      timeColName = "date",flagColName = "isBizday",
+  #                                      expFlag = data.hznu.area.signCheck[date==i]$isBizday[1],timeInvl = -24*3600))
+  # #取行为模式
+  # data.hznu.area.signCheck[date==i,c(paste(rep("r1_",6),patternRatioName,sep = ""))]<-
+  #   data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
+  # #取能耗模式
+  # data.hznu.area.signCheck[date==i,c(paste(rep("r1_",4),energyPatternRatioName,sep = ""))]<-
+  #   data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
   
   #取前一天
-  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
-                                       timeColName = "date",timeInvl = -24*3600))
+  targetTime<-as.POSIXct(getTargetTime(thisTime = i,data = data.hznu.area.signCheck,beforeHour = 0,beforeDay = 1,byDate = TRUE,
+                                       timeColName = "date",flagColName = "isBizday",expFlag = data.hznu.area.signCheck[date==i]$isBizday[1]))
   data.hznu.area.signCheck[date==i,c(paste(rep("d1_",6),patternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
   data.hznu.area.signCheck[date==i,c(paste(rep("d1_",4),energyPatternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
   
   #取前七天
-  targetTime<-as.POSIXct(getTargetDate(thisTime = i,data = data.hznu.area.signCheck,
-                                       timeColName = "date",timeInvl = -7*24*3600))
+  targetTime<-as.POSIXct(getTargetTime(thisTime = i,data = data.hznu.area.signCheck,beforeHour = 0,beforeDay = 7,byDate = TRUE,
+                                       timeColName = "date",flagColName = "isBizday",expFlag = data.hznu.area.signCheck[date==i]$isBizday[1]))
   data.hznu.area.signCheck[date==i,c(paste(rep("d7_",6),patternRatioName,sep = ""))]<-
     data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..patternRatioName][1]
   data.hznu.area.signCheck[date==i,c(paste(rep("d7_",4),energyPatternRatioName,sep = ""))]<-
       data.hznu.area.signCheck[date==format(targetTime,format="%Y-%m-%d"),..energyPatternRatioName][1]
 }
+data.hznu.area.signCheck<-as.data.table(data.hznu.area.signCheck)
+####对于模式缺失值的处理####
+# 思路：
+# 对于同一时刻的模式（例如d1行为模式）若均为缺失则不处理保留缺失
+# 若部分缺失，例如间断、全天、白天有，其他模式缺失，则将其他模式缺失值改为0
+#有没有聪明的办法 无需进一步处理
+# for(i in c("d1_","d7_")){
+#   selectCol<-paste(rep(i,6),patternRatioName,sep = "")
+#   selectFlag<-data.hznu.area.signCheck[,..patternRatioName]%>%
+#     .[,apply(.SD, MARGIN = 1,FUN = function(x){sum(x.na.rm=TRUE)})]#!=length(patternRatioName)
+# }
+# 
+# nn<-data.table(a=c(1,2,3,NA),b=c(4,NA,6,NA),c=c(NA,7,8,NA))
+# nn[,c("a","b")]<-nn[,c("a","b")]%>%.[.[,apply(.SD, MARGIN = 1,
+#           FUN = function(x){sum(is.na(x))})!=2],]%>% mutate_all(funs(ifelse(is.na(.), 0, .)))
+# nn[,c("a","b")]%>%.[,apply(.SD, MARGIN = 1,
+#                              FUN = function(x){sum(is.na(x))})!=2]
+# PERFECT!
 
-nn<-data.hznu.area.signCheck[,c("date","isBizday","onDemandRatio","d1_onDemandRatio","d1_onDemandRatio_org")]
+nn<-replace(x=NA,nn, 0)
+nn[,1:3]<-apply(X = nn[,1:3],MARGIN = 1,
+                FUN = function(x){
+                  if(sum(is.na(x))!=3){
+                    x[is.na(x)]<-0
+                  }
+                  cat(x)
+                  return(x)
+                })
+
+
 
 data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start = 1)
-
+backup.hznu.area.signCheck<-data.hznu.area.signCheck
 
 ####按季节归一化####
 data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
@@ -255,6 +295,7 @@ data.hznu.area.signCheck.pickup$stdModiElec<- -9999
 for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
+
 ####按logistics循环统计变量显著性####
 rm(stat.hznu.area.predict.sign)
 for(i in c("stdModiElec")){#,"fullOnRatio"
