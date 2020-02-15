@@ -139,16 +139,32 @@ data.hznu.area.signCheck$refHour1<-apply(X=data.hznu.area.signCheck[,c("datetime
                                         }) %>% as.POSIXct(.)
 
 
-# 修正d0h1对于日起始小时的问题
+#### 修正d0h1对于日起始小时的问题####
 data.hznu.area.signCheck$back_d0h1fullOnRatio<-data.hznu.area.signCheck$d0h1_FullOnRatio
 data.hznu.area.signCheck$back_d0h1ModiElec<-data.hznu.area.signCheck$d0h1_modiElec
-data.hznu.area.signCheck[hour==8]$d0h1_FullOnRatio<-apply(data.hznu.area.signCheck[hour==8,c("refHour1")],MARGIN = 1,
+data.hznu.area.signCheck[hour==8]$d0h1_FullOnRatio<-apply(data.hznu.area.signCheck[hour==8,c("refHour1","isBizday")],MARGIN = 1,
                                                           FUN = function(x){
-                                                            return(mean(data.hznu.area.signCheck[date==substr(x,1,10)]$fullOnRatio,na.rm = TRUE))
+                                                            if(anyNA(x))
+                                                              return(NA)
+                                                            if(as.logical(gsub(" ","",x[2]))){
+                                                              #如果是工作日则取前一天均值
+                                                              return(mean(data.hznu.area.signCheck[date==substr(x[1],1,10)]$fullOnRatio,na.rm = TRUE))
+                                                            }else{
+                                                              #如果是非工作日则取前一天8h
+                                                              return(data.hznu.area.signCheck[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$fullOnRatio[1])
+                                                            }
                                                           })
-data.hznu.area.signCheck[hour==8]$d0h1_modiElec<-apply(data.hznu.area.signCheck[hour==8,c("refHour1")],MARGIN = 1,
+data.hznu.area.signCheck[hour==8]$d0h1_modiElec<-apply(data.hznu.area.signCheck[hour==8,c("refHour1","isBizday")],MARGIN = 1,
                                                           FUN = function(x){
-                                                            return(mean(data.hznu.area.signCheck[date==substr(x,1,10)]$modiElec,na.rm = TRUE))
+                                                            if(anyNA(x))
+                                                              return(NA)
+                                                            if(as.logical(gsub(" ","",x[2]))){
+                                                              #如果是工作日则取前一天均值
+                                                              return(mean(data.hznu.area.signCheck[date==substr(x[1],1,10)]$modiElec,na.rm = TRUE))
+                                                            }else{
+                                                              #如果是非工作日则取前一天8h
+                                                              return(data.hznu.area.signCheck[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$modiElec[1])
+                                                            }
                                                           })
 
 
