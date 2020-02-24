@@ -99,6 +99,8 @@ list.hznu.room.use[["NA_Transition"]]<-NULL#过渡季缺失不能用
 
 ##可接"HZNU_含追加_房间级_行为预处理完成.rdata"
 
+data.hznu.teaching.use<-merge(x=data.hznu.teaching.use,y=info.hznu.teaching.room[,c("roomCode","modiSeat")],all.x = TRUE,by="roomCode")
+
 ####仅教学行为部分全年统计####
 # 该部分后加，400条数据未在行为聚类中处理，且未保存
 # 修正缺失的finalState

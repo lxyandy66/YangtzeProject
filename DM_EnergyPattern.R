@@ -376,8 +376,42 @@ data.hznu.teaching.energy.std$areaScale<-apply(X = data.hznu.teaching.energy.std
 ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
        aes(fill=clusterName,x=as.factor(modiSeat)))+geom_bar()#真没啥区别
 
+#不同规模教室各季节空调使用时长
+ggplot(data=data.hznu.teaching.decoupling,aes(x=areaScale,y=runtime))+geom_boxplot(width=0.5)+
+  stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+scale_y_continuous(breaks=seq(0,18,2))+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))+
+  facet_wrap(~modiSeason,nrow=1)#
+
+#不同规模教室各季节空调使用模式分布
+ggplot(data=data.hznu.teaching.decoupling,aes(fill=clusterName,x=areaScale))+geom_bar(position = "fill",width=0.75)+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))+
+  facet_wrap(~modiSeason,nrow=1)+
+  scale_fill_brewer(palette="Greys")+scale_color_manual(values=rep("grey",6))
+
 ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
        aes(x=as.factor(modiSeat),y=acIntensity,color=clusterName,group=clusterName))+stat_summary(fun.y = "mean",geom = "point")+stat_summary(fun.y = "mean",geom = "line")
+
+#不同教室空调使用率区别
+
+nn<-data.hznu.teaching.use[runtime!=15] %>% .[,.(roomCode=roomCode[1],
+                                             date=date[1],
+                                             modiSeason=modiSeason[1],
+                                             modiSeat=modiSeat[1],
+                                             areaScale=areaScale[1],
+                                             meanRuntime=mean(runtime[runtime!=0],na.rm = TRUE),
+                                             useRate=length(labelRoomDay[runtime!=0])/length(labelRoomDay),
+                                             useCount=length(labelRoomDay[runtime!=0])),
+                                          by=(labelRoomSeason=paste(roomCode,modiSeason,sep = "_"))]
+# write.xlsx(nn,"HZNU_原始数据_教室空调日使用率.xlsx")
+# =IF(F2>90,"90人以上",F2)
+for(i in unique(nn$areaScale)){
+  cat(i,"\t",mean(nn[areaScale==i&modiSeason=="Summer_warm"]$useRate),"\n")
+}
+
+ggplot(data=nn[useRate<0.4],aes(x=areaScale,y=useRate))+geom_boxplot(width=0.5)+
+  stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+#scale_y_continuous(breaks=seq(0,18,2))+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))+
+  facet_wrap(~modiSeason,nrow=1)#
 
 #各行为模式下空调设定温度分布
 ggplot(data=data.hznu.teaching.decoupling[finalState=="cooling"],aes(x=clusterName,y=setTemp))+geom_boxplot()+stat_summary(fun.y = "mean",geom = "point",color="red")#+facet_wrap(~finalState)

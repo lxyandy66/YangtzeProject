@@ -219,7 +219,7 @@ getRSquare<-function(pred,ref){
   data.caculate<-data.table(pred=pred,ref=ref)
   data.caculate<-na.omit(data.caculate)
   data.caculate$SSE<-(data.caculate$ref- data.caculate$pred)^2
-  data.caculate$SST<-(data.caculate$pred- mean(data.caculate$ref,na.rm = TRUE))^2
+  data.caculate$SST<-(data.caculate$ref- mean(data.caculate$ref,na.rm = TRUE))^2
   return( 1- ( sum(data.caculate$SSE) / sum(data.caculate$SST) ) )
 }
 

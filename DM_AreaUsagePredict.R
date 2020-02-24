@@ -268,12 +268,14 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log#2020.02.14 ±¸·ÝÁË8µãÓÃ²
 backup.hznu.area.predict.use<-data.hznu.area.predict.use#2020.02.14 ±¸·ÝÁË8µãÓÃ²Î¿¼ÌìÆ½¾ù´úÌæµÄÖµ
 
 ####´óÂÛÎÄÓÃÊ±¼äÐòÁÐÐ§¹ûÆÀ¹À####
-data.hznu.area.predict.use[date=="2017-12-17"&date %in% paperTime$Winter_warm] %>% {
-  cat("MAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
-  cat("\nRMSE\t",RMSE(pred = .$simpleKnnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE))#0.022
-  cat("\nRSquare\t",getRSquare(pred = .$simpleKnnFullOnRatio,ref = .$fullOnRatio))#0.8631175
-  
-  cat("\n",RMSE(pred = .$simpleKnnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE),"\t",getRSquare(pred = .$simpleKnnFullOnRatio,ref = .$fullOnRatio))#0.8631175
+for(i in names(paperTime)){
+  data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
+      cat("\n",i,": \nMAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$knnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+      cat("\nRMSE\t",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE))#0.022
+      cat("\nRSquare\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
+      
+      cat("\n",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),"\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
+  }
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio,svmInitPred,svmIterPred
 

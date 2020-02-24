@@ -307,7 +307,7 @@ backup.hznu.area.signCheck<-data.hznu.area.signCheck
 
 ####按季节归一化####
 data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
-data.hznu.area.signCheck.pickup$stdModiElec<- -9999
+data.hznu.area.signCheck.pickup$stdModiElec<- -999
 for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
