@@ -332,6 +332,12 @@ normalize<-function(data,upper=1,lower=0,intercept=0){
   return(intercept+abs(upper-lower)*(data-range[1])/(range[2]-range[1]))
 }
 
+denormalize<-function(targetNorm,refReal,refNorm,upper=1,lower=0,intercept=0){
+  refNorm[refNorm==0]<-0.000000001
+  targetNorm[targetNorm==0]<-0.000000001
+  return(refReal*targetNorm/refNorm)
+}
+
 
 ####分类器验证函数####
 predictTest<-function(testSet,resultValue,predictableModel,isOutput=FALSE,fileName="testSetEvaluation.txt"){
