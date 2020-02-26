@@ -118,7 +118,27 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log
 
 
 
+####取增强SVM使用率预测的误差####
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errSvmIter=fullOnRatio-svmIterPred)%>%as.data.table(.)
+
+data.hznu.area.predict.use$h1_errSvmIter<-apply(data.hznu.area.predict.use[,"refHour1"],MARGIN = 1,
+                                                   FUN = function(x){data.hznu.area.predict.use[datetime==as.POSIXct(x)]$errSvmIter[1]})
+data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvmIter<-apply(data.hznu.area.predict.use[hour(datetime)==8,c("refHour1","isBizday")],MARGIN = 1,
+                                                               FUN = function(x){
+                                                                 if(anyNA(x))
+                                                                   return(NA)
+                                                                 if(as.logical(gsub(" ","",x[2]))){
+                                                                   #如果是工作日则取前一天均值
+                                                                   return(mean(data.hznu.area.predict.use[date==substr(x[1],1,10)]$errSvmIter,na.rm = TRUE))
+                                                                 }else{
+                                                                   #如果是非工作日则取前一天8h
+                                                                   return(data.hznu.area.predict.use[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$errSvmIter[1])
+                                                                 }
+                                                               })
+
+
 data.hznu.area.predict.log<-data.hznu.area.predict.log[target!="modiElec"]
+# backup.hznu.area.predict.log<-data.hznu.area.predict.log
 ####采用随机森林方法建立基础预测并对变量进行筛选####
 list.hznu.area.energyForest<-list()
 data.hznu.area.predict.use$rfIdelElec<- -999
@@ -135,6 +155,7 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
                           "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""),
                   "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
                   "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio")
+      if(k=="real"){fullAttr<-append(fullAttr,"h1_errSvmIter")}
       fit<-randomForest(as.formula( paste("stdModiElec ~ ",paste(fullAttr,collapse = "+") ) ),
                         data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..fullAttr])],
                         #ntree=1000,cp=localInitCP,
@@ -195,6 +216,10 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # RMSE 0.03025051 / 18.89251
 # R-square 0.9522192 / 0.9722222
 
+#全属性下RF-ideal-完全归一化/反归一化 + SVM使用预测误差
+# MAPE 0.0651106 / 0.06451802
+# RMSE 0.03021496 / 18.88092
+# R-square 0.9523314 / 0.9722563
 
 
 ####汇总随机森林得出的重要性####
@@ -219,7 +244,7 @@ stat.hznu.area.predict.energyFactor.eva<-stat.hznu.area.predict.energyFactor.eva
                                             .[,.(rlatIncMSE=sum(IncMSE),rlatIncPur=sum(IncPur)),by=labelSeasonType]%>% #汇总统计各季节指标总和
                                             merge(y=.,x=stat.hznu.area.predict.energyFactor.eva,by="labelSeasonType",all.x=TRUE)%>% #合并总和指标
                                             mutate(.,rlatIncMSE=IncMSE/rlatIncMSE,rlatIncPur=IncPur/rlatIncPur)%>%as.data.table(.) #将总和指标转变为占比
-write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量筛选_归一化后.xlsx")
+write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量及使用误差筛选_归一化后.xlsx")
 
 nn<-data.table(type=c("a","a","b"),p=c(10,90,10))
 nn$port<-nn[,apply(.,MARGIN = 1,FUN = function(x){return(x[2]/sum())})]
@@ -240,7 +265,7 @@ predictElecAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour",
                       Summer_warm=c("d7h0_modiElecStd","d1_ltMeRatio","d1_ltMeRatio"),
                       Summer=c("stdWindSpeed","d1_ltMeRatio"))
 
-####SVM####
+####SVM初始预测####
 #取RF预测的基本误差
 data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errRfIdel=stdModiElec-rfIdelElec,errRfReal=stdModiElec-rfRealElec)%>%as.data.table(.)
 
@@ -275,26 +300,32 @@ data.hznu.area.predict.use[hour(datetime)==8]$h1_errRfRealBase<-apply(data.hznu.
                                                                 })
 
 
-
-data.hznu.area.predict.use$svmInitElecPred<- -999
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,svmInitIdeaElec=-999,svmInitRealElec=-999)%>%as.data.table(.)
 
 for(season in unique(data.hznu.area.predict.use$modiSeason)){
   for(type in c("real","ideal")){
     for(round in 0:9){
       seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
                       ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"))
+      if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
       fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
                     data=data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])],
                     kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
-      ###要改
-      data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]$svmInitElecPred<-
-        predict(fit.svm,data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])])
+      
+      if(type=="real"){
+        data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]$svmInitRealElec<-
+          predict(fit.svm,data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])])
+      }else{
+        data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]$svmInitIdeaElec<-
+          predict(fit.svm,data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])])
+      }
+      
       
       #单独对十折的结果进行储存，此处为预测集
       data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]%>%
         data.table(id=.$id,datetime=.$datetime,modiSeason=season,
                    target="stdModiElec",method=paste("svmInitPred",type,sep="_"),setType="test",
-                   round=round,predValue=.$svmInitElecPred,realValue=.$stdModiElec)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+                   round=round,predValue=pull(.,ifelse(type=="real","svmInitRealElec","svmInitIdeaElec")),realValue=.$stdModiElec)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
       
       #单独对十折的结果进行储存，此处为训练集
       data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])] %>%
@@ -304,133 +335,122 @@ for(season in unique(data.hznu.area.predict.use$modiSeason)){
     }
   }
 }
-data.hznu.area.predict.use[svmInitElecPred== -999]$svmInitElecPred<-NA
+data.hznu.area.predict.use[svmInitRealElec== -999]$svmInitRealElec<-NA
+data.hznu.area.predict.use[svmInitIdeaElec== -999]$svmInitIdeaElec<-NA
 
-getMAPE(yPred = data.hznu.area.predict.use[stdModiElec!=0]$svmInitElecPred, yLook = data.hznu.area.predict.use[stdModiElec!=0]$stdModiElec)#0.8568157
-RMSE(pred = data.hznu.area.predict.use$svmInitElecPred,obs = data.hznu.area.predict.use$stdModiElec,na.rm = TRUE)#25.15353
-getRSquare(pred = data.hznu.area.predict.use$svmInitElecPred,ref = data.hznu.area.predict.use$stdModiElec)#0.944896
+getMAPE(yPred = data.hznu.area.predict.use[stdModiElec!=0]$svmInitIdeaElec, yLook = data.hznu.area.predict.use[stdModiElec!=0]$stdModiElec)#0.8568157
+RMSE(pred = data.hznu.area.predict.use$svmInitIdeaElec,obs = data.hznu.area.predict.use$stdModiElec,na.rm = TRUE)#25.15353
+getRSquare(pred = data.hznu.area.predict.use$svmInitIdeaElec,ref = data.hznu.area.predict.use$stdModiElec)#0.944896
 
 #反归一化
-data.hznu.area.predict.use$rfIdelElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$rfIdelElec,refReal = .$modiElec,refNorm = .$stdModiElec)
-data.hznu.area.predict.use$rfRealElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$rfRealElec,refReal = .$modiElec,refNorm = .$stdModiElec)
-data.hznu.area.predict.use<-data.hznu.area.predict.use%>%mutate(.,sv)
+data.hznu.area.predict.use$svmInitIdeaElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$svmInitIdeaElec,refReal = .$modiElec,refNorm = .$stdModiElec)
+data.hznu.area.predict.use$svmInitRealElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$svmInitRealElec,refReal = .$modiElec,refNorm = .$stdModiElec)
 
-getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$rfIdelElecDeNorm, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#1.071317 #k=5 1.740213; k=3 1.709286 #k=10 1.930663
-RMSE(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#24.81667
-getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.area.predict.use$modiElec)#0.951946
+
+getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$svmInitIdeaElecDeNorm, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#1.071317 #k=5 1.740213; k=3 1.709286 #k=10 1.930663
+RMSE(pred = data.hznu.area.predict.use$svmInitIdeaElecDeNorm,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#24.81667
+getRSquare(pred = data.hznu.area.predict.use$svmInitIdeaElecDeNorm,ref = data.hznu.area.predict.use$modiElec)#0.951946
 
 
 #全属性下SVMinit-ideal-完全归一化/反归一化
-# MAPE 0.05936975 / 0.06439494
-# RMSE 0.02800073 / 18.89251
-# R-square 0.9591204 / 0.9722222
+# MAPE 0.05923854 / 0.05938371
+# RMSE 0.02804778 / 17.60985
+# R-square 0.9589829 / 0.9759037
 
 
 ####能耗预测SVM增强####
 #增加SVM初始预测误差作为输入
 
-data.hznu.area.predict.use$stdErrSvmElec<-(data.hznu.area.predict.use$svmInitElecPred-data.hznu.area.predict.use$modiElec) %>%
-  normalize(.,upper = 0.9,lower = 0.1,intercept = 0.1)
-data.hznu.area.predict.use$h1_stdErrSvmElec<-c(NA,data.hznu.area.predict.use[2:nrow(data.hznu.area.predict.use)-1]$stdErrSvmElec)
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errSvmInitIdel=stdModiElec-svmInitIdeaElec,
+                                                                 errSvmInitReal=stdModiElec-svmInitRealElec)%>%as.data.table(.)
 
-data.hznu.area.predict.use$svmIterPredElec<- -999
+data.hznu.area.predict.use$h1_errSvmInitIdel<-apply(data.hznu.area.predict.use[,"refHour1"],MARGIN = 1,
+                                                   FUN = function(x){data.hznu.area.predict.use[datetime==as.POSIXct(x)]$errSvmInitIdel[1]})
+data.hznu.area.predict.use$h1_errSvmInitReal<-apply(data.hznu.area.predict.use[,"refHour1"],MARGIN = 1,
+                                                   FUN = function(x){data.hznu.area.predict.use[datetime==as.POSIXct(x)]$errSvmInitReal[1]})
 
-for(i in unique(data.hznu.area.predict.use$modiSeason)){
-  for(j in 0:9){
-    seasonalAttr<-c(predictUsageAttr[["constant"]],predictUsageAttr[[i]],"simpleKnnPredElec","h1_stdElecErrKnn","svmInitElecPred","h1_stdErrSvmElec")
-    fit.svm<-ksvm(x=as.formula( paste("modiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
-                  data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
-                  kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
-    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$svmIterPredElec<-
-      predict(fit.svm,data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])])
-    
-    #单独对十折的结果进行储存，此处为预测集
-    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
-      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
-                 target="modiElec",method="svmIterPred",setType="test",
-                 round=j,predValue=.$svmIterPredElec,realValue=.$modiElec)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
-    
-    #单独对十折的结果进行储存，此处为训练集
-    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])] %>%
-      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
-                 target="modiElec",method="svmIterPred",setType="train",
-                 round=j,predValue=as.numeric(predict(fit.svm,.)),realValue=.$modiElec) %>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvmInitIdel<-apply(data.hznu.area.predict.use[hour(datetime)==8,c("refHour1","isBizday")],MARGIN = 1,
+                                                                      FUN = function(x){
+                                                                        if(anyNA(x))
+                                                                          return(NA)
+                                                                        if(as.logical(gsub(" ","",x[2]))){
+                                                                          #如果是工作日则取前一天均值
+                                                                          return(mean(data.hznu.area.predict.use[date==substr(x[1],1,10)]$errSvmInitIdel,na.rm = TRUE))
+                                                                        }else{
+                                                                          #如果是非工作日则取前一天8h
+                                                                          return(data.hznu.area.predict.use[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$errSvmInitIdel[1])
+                                                                        }
+                                                                      })
+data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvmInitReal<-apply(data.hznu.area.predict.use[hour(datetime)==8,c("refHour1","isBizday")],MARGIN = 1,
+                                                                      FUN = function(x){
+                                                                        if(anyNA(x))
+                                                                          return(NA)
+                                                                        if(as.logical(gsub(" ","",x[2]))){
+                                                                          #如果是工作日则取前一天均值
+                                                                          return(mean(data.hznu.area.predict.use[date==substr(x[1],1,10)]$errSvmInitReal,na.rm = TRUE))
+                                                                        }else{
+                                                                          #如果是非工作日则取前一天8h
+                                                                          return(data.hznu.area.predict.use[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$errSvmInitReal[1])
+                                                                        }
+                                                                      })
+
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,svmIterIdeaElec=-999,svmIterRealElec=-999)%>%as.data.table(.)
+for(season in unique(data.hznu.area.predict.use$modiSeason)){
+  for(type in c("real","ideal")){
+    for(round in 0:9){
+      seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
+                      ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"),
+                      ifelse(type=="real","svmInitRealElec","svmInitIdeaElec"),ifelse(type=="real","h1_errSvmInitReal","h1_errSvmInitIdel"))
+      if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
+      fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
+                    data=data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])],
+                    kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
+      
+      if(type=="real"){
+        data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]$svmIterRealElec<-
+          predict(fit.svm,data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])])
+      }else{
+        data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]$svmIterIdeaElec<-
+          predict(fit.svm,data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])])
+      }
+      
+      
+      #单独对十折的结果进行储存，此处为预测集
+      data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10==round&modiSeason==season,..seasonalAttr])]%>%
+        data.table(id=.$id,datetime=.$datetime,modiSeason=season,
+                   target="stdModiElec",method=paste("svmIterPred",type,sep="_"),setType="test",
+                   round=round,predValue=pull(.,ifelse(type=="real","svmIterRealElec","svmIterIdeaElec")),realValue=.$stdModiElec)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+      
+      #单独对十折的结果进行储存，此处为训练集
+      data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])] %>%
+        data.table(id=.$id,datetime=.$datetime,modiSeason=season,
+                   target="stdModiElec",method=paste("svmIterPred",type,sep="_"),setType="train",
+                   round=round,predValue=as.numeric(predict(fit.svm,.)),realValue=.$stdModiElec) %>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
+    }
   }
 }
-data.hznu.area.predict.use[svmIterPredElec== -999]$svmIterPredElec<-NA
-
-getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$svmIterPredElec, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#0.6399979
-RMSE(pred = data.hznu.area.predict.use$svmIterPredElec,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#25.45938
-boxplot.stats(abs((data.hznu.area.predict.use$modiElec-
-                     data.hznu.area.predict.use$svmIterPredElec)/data.hznu.area.predict.use$modiElec))#6.729713e-05 5.901312e-02 1.363222e-01 3.212818e-01 7.135150e-01
-getRSquare(pred = data.hznu.area.predict.use$svmIterPredElec,ref = data.hznu.area.predict.use$modiElec)#0.9401302
-
-#以下为使用增强SVM行为的增强SVM能耗预测值
-# MAPE 1.785482
-# RMSE 38.09734
-# R-Square 0.8368258
 
 
+data.hznu.area.predict.use[svmIterRealElec== -999]$svmIterRealElec<-NA
+data.hznu.area.predict.use[svmIterIdeaElec== -999]$svmIterIdeaElec<-NA
+
+getMAPE(yPred = data.hznu.area.predict.use[stdModiElec!=0]$svmIterIdeaElec, yLook = data.hznu.area.predict.use[stdModiElec!=0]$stdModiElec)#0.8568157
+RMSE(pred = data.hznu.area.predict.use$svmIterIdeaElec,obs = data.hznu.area.predict.use$stdModiElec,na.rm = TRUE)#25.15353
+getRSquare(pred = data.hznu.area.predict.use$svmIterIdeaElec,ref = data.hznu.area.predict.use$stdModiElec)#0.944896
+
+#反归一化
+data.hznu.area.predict.use$svmIterIdeaElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$svmIterIdeaElec,refReal = .$modiElec,refNorm = .$stdModiElec)
+data.hznu.area.predict.use$svmIterRealElecDeNorm<-data.hznu.area.predict.use%>%denormalize(targetNorm = .$svmIterRealElec,refReal = .$modiElec,refNorm = .$stdModiElec)
 
 
+getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$svmIterIdeaElecDeNorm, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#1.071317 #k=5 1.740213; k=3 1.709286 #k=10 1.930663
+RMSE(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#24.81667
+getRSquare(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,ref = data.hznu.area.predict.use$modiElec)#0.951946
 
-####knn####
-for(i in unique(data.hznu.area.predict.use$modiSeason)){
-  for(j in 0:9){
-    #根据id mod 10 来确定交叉验证的划分
-    seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[i]])#,
-    fit.kknn<-kknn(formula = as.formula( paste("modiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
-                   kernel = "optimal",k=3,na.action = na.exclude,
-                   train = data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..seasonalAttr])],
-                   test = data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]
-    )
-    data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]$knnPredElec<-fit.kknn$fitted.values
-    
-    #不太放心，单独存一个
-    data.hznu.area.predict.log<-data.hznu.area.predict.use[id%%10==j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10==j&modiSeason==i,..seasonalAttr])]%>%
-      data.table(id=.$id,datetime=.$datetime,modiSeason=i,
-                 target="modiElec",method="knnPredElec",setType="test",
-                 round=j,predValue=.$knnPredElec,realValue=.$modiElec)%>% .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
-    
-  }
-}
-
-
-data.hznu.area.predict.use$knnPredElec<- -999
-data.hznu.area.predict.use$simpleKnnPredElec<- -999
-
-####以下为使用增强SVM行为的完整knn预测值####
-# MAPE 1.987696
-# RMSE 45.95319
-# R-Square 0.8112507
-
-#考虑一下简化knn的基本误差
-getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$simpleKnnPredElec, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#1.41261
-RMSE(pred = data.hznu.area.predict.use$simpleKnnPredElec,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#26.15484
-boxplot.stats(abs((data.hznu.area.predict.use$modiElec-
-                     data.hznu.area.predict.use$simpleKnnPredElec)/data.hznu.area.predict.use$modiElec))#9.185365e-05 9.497209e-02 2.405226e-01 6.035953e-01 1.366439e+00
-getRSquare(pred = data.hznu.area.predict.use$simpleKnnPredElec,ref = data.hznu.area.predict.use$modiElec)#0.9405694
-#以下为使用增强SVM行为的简化knn预测值
-# MAPE 1.829155
-# RMSE 40.20034
-# R-Square 0.8538488
-
-data.hznu.area.predict.use[knnPredElec== -999]$knnPredElec<-NA
-data.hznu.area.predict.use[simpleKnnPredElec== -999]$simpleKnnPredElec<- -NA
-
-##测一下fullKNN的k值
-#确实变量一多了就不能取多
-ggplot(data = data.table(id=1:nrow(fit.kknn$D),fit.kknn$D) %>% melt(.,id.var="id"),aes(x=variable,y=value,color=id,group=id))+geom_point()+geom_line()
-
-#考虑一下knn的误差
-#以下为理想值
-getMAPE(yPred = data.hznu.area.predict.use[modiElec!=0]$knnPredElec, yLook = data.hznu.area.predict.use[modiElec!=0]$modiElec)#1.709286 #k=5 1.740213; k=3 1.709286 #k=10 1.930663
-RMSE(pred = data.hznu.area.predict.use$knnPredElec,obs = data.hznu.area.predict.use$modiElec,na.rm = TRUE)#33.24661
-boxplot.stats(abs((data.hznu.area.predict.use$modiElec-
-                     data.hznu.area.predict.use$knnPredElec)/data.hznu.area.predict.use$modiElec))#0.00000000 0.08039036 0.18758149 0.41816919 0.92396363
-getRSquare(pred = data.hznu.area.predict.use$knnPredElec,ref = data.hznu.area.predict.use$modiElec)#0.9135975
-
-
+#SVMiter-ideal-完全归一化/反归一化
+# MAPE 0.05431289 / 0.05456478
+# RMSE 0.02544792 / 15.78038
+# R-square 0.9662865 / 0.9806844
 
 
 
@@ -461,16 +481,32 @@ data.hznu.area.predict.log[target=="modiElec"] %>%
                                                               obs = .[modiSeason==i&method==j&setType==k]$realValue,na.rm = TRUE),
                                                       rSquare=getRSquare(pred = .[modiSeason==i&method==j&setType==k]$predValue,
                                                                        ref = .[modiSeason==i&method==j&setType==k]$realValue)))
+        }
       }
     }
-  }
   }
 write.xlsx(stat.hznu.area.predict.eva,file = "HZNU_区域能耗预测_随机森林全部属性.xlsx")
 ggplot(data=stat.hznu.area.predict.eva,aes(x=modiSeason,y=rSquare,group=method,color=method))+geom_line()+geom_point()+facet_wrap(~setType,ncol = 2)
   
-  
+####统计大论文中各####
+for(i in names(paperTime)){
+  for(j in c("real","ideal")){
+    data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
+      # cat("\n",i,": \nMAPE\t",getMAPE(yPred = .[modiElec!=0]$rfIdelElecDeNorm, yLook = .[modiElec!=0]$modiElec))#0.5800756
+      # cat("\nRMSE\t",RMSE(pred = .$rfIdelElecDeNorm,obs = .$modiElec,na.rm = TRUE))#0.022
+      # cat("\nRSquare\t",getRSquare(pred = .$rfIdelElecDeNorm,ref = .$modiElec))#0.8631175
+      
+      cat("\n",i,"\t",j,"\t",
+          RMSE(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),ref = .$modiElec))#0.8631175
+    }
+  }
+}
+
+# svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
+
 ####绘图输出####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElec","rfRealElec")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","svmIterIdeaElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
