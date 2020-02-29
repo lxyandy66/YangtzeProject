@@ -155,7 +155,7 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
                           "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""),
                   "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
                   "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio")
-      if(k=="real"){fullAttr<-append(fullAttr,"h1_errSvmIter")}
+      # if(k=="real"){fullAttr<-append(fullAttr,"h1_errSvmIter")}
       fit<-randomForest(as.formula( paste("stdModiElec ~ ",paste(fullAttr,collapse = "+") ) ),
                         data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..fullAttr])],
                         #ntree=1000,cp=localInitCP,
@@ -212,9 +212,9 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # R-square 0.9466332
 
 #全属性下RF-ideal-完全归一化/反归一化
-# MAPE 0.06493378 / 0.06439494
-# RMSE 0.03025051 / 18.89251
-# R-square 0.9522192 / 0.9722222
+# MAPE 0.06491564 / 0.06437572
+# RMSE 0.03015491 / 18.81929
+# R-square 0.9525207 / 0.9724371
 
 #全属性下RF-ideal-完全归一化/反归一化 + SVM使用预测误差
 # MAPE 0.0651106 / 0.06451802
@@ -307,7 +307,7 @@ for(season in unique(data.hznu.area.predict.use$modiSeason)){
     for(round in 0:9){
       seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
                       ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"))
-      if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
+      # if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
       fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
                     data=data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])],
                     kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
@@ -353,9 +353,9 @@ getRSquare(pred = data.hznu.area.predict.use$svmInitIdeaElecDeNorm,ref = data.hz
 
 
 #全属性下SVMinit-ideal-完全归一化/反归一化
-# MAPE 0.05923854 / 0.05938371
-# RMSE 0.02804778 / 17.60985
-# R-square 0.9589829 / 0.9759037
+# MAPE 0.05956362 / 0.0597498
+# RMSE 0.02809526 / 17.48883
+# R-square 0.9588439 / 0.9762337
 
 
 ####能耗预测SVM增强####
@@ -401,7 +401,7 @@ for(season in unique(data.hznu.area.predict.use$modiSeason)){
       seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
                       ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"),
                       ifelse(type=="real","svmInitRealElec","svmInitIdeaElec"),ifelse(type=="real","h1_errSvmInitReal","h1_errSvmInitIdel"))
-      if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
+      # if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
       fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
                     data=data.hznu.area.predict.use[id%%10!=round&modiSeason==season][complete.cases(data.hznu.area.predict.use[id%%10!=round&modiSeason==season,..seasonalAttr])],
                     kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
@@ -448,9 +448,9 @@ RMSE(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,obs = data.hznu.are
 getRSquare(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,ref = data.hznu.area.predict.use$modiElec)#0.951946
 
 #SVMiter-ideal-完全归一化/反归一化
-# MAPE 0.05431289 / 0.05456478
-# RMSE 0.02544792 / 15.78038
-# R-square 0.9662865 / 0.9806844
+# MAPE 0.05478437 / 0.05511059
+# RMSE 0.02544581 / 15.75854
+# R-square 0.9662921 / 0.9807378
 
 
 
@@ -497,8 +497,8 @@ for(i in names(paperTime)){
       # cat("\nRSquare\t",getRSquare(pred = .$rfIdelElecDeNorm,ref = .$modiElec))#0.8631175
       
       cat("\n",i,"\t",j,"\t",
-          RMSE(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
-          getRSquare(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),ref = .$modiElec))#0.8631175
+          RMSE(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),ref = .$modiElec))#0.8631175
     }
   }
 }
@@ -506,9 +506,9 @@ for(i in names(paperTime)){
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
 
 ####绘图输出####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","svmIterIdeaElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","svmIterIdeaElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
-       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
 
 
