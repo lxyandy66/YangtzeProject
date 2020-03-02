@@ -6,6 +6,7 @@
 # 直接在data.hznu.area.predict.use上进行预测
 
 backup.hznu.area.predict.use<-data.hznu.area.predict.use
+backup.hznu.area.predict.log<-data.hznu.area.predict.log#20200301 保留的是完整版的SVM加强
 
 #检查一下signCheck.pickUp和data.hznu.area.predict.use数据集能不能直接cbind
 nn<-data.table(datetimeUse=data.hznu.area.predict.use$datetime,datetimeSign=data.hznu.area.signCheck.pickup$datetime)
@@ -36,6 +37,7 @@ data.hznu.area.predict.use[,c(paste(c("d0h1","d0h2",
                                       "d1h0","d1h1","d1h2",
                                       "d2h0","d2h1","d2h2",
                                       "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""))]<--999
+
 
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   data.hznu.area.predict.use[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.predict.use[modiSeason==i,"modiElec"],
@@ -95,28 +97,9 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log
 
 
 ####构建分季节能耗预测属性####
-# 原属性
-# predictElecAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","svmIterPred","d0h1_modiElec"),
-#                       Winter=c("d0h1_modiElec","d0h2_modiElec",
-#                                "d1h0_modiElec","d1h1_modiElec","d1h2_modiElec",
-#                                "d2h0_modiElec",
-#                                "d7_ltMeRatio",
-#                                "outTemp","hour",
-#                                ),
-#                       Winter_warm=c("d0h1_modiElec","d0h2_modiElec",
-#                                     "d1h0_modiElec","d1h1_modiElec",
-#                                     "d2h0_modiElec","d2h1_modiElec",
-#                                     "d7h0_modiElec",
-#                                     "outTemp","hour"
-#                                     ),
-#                       Transition=c("d1h0_modiElec",
-#                                     "d1_midEnergyRatio"),
-#                       Summer_warm=c("stdRhOut",
-#                                      "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d7_lowEnergyRatio"),
-#                       Summer=c("stdWindSpeed",
-#                                 "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio"))
 
 
+set.seed(711)
 
 ####取增强SVM使用率预测的误差####
 data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errSvmIter=fullOnRatio-svmIterPred)%>%as.data.table(.)
@@ -206,20 +189,16 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # RMSE 26.07916
 # R-square 0.9470695
 
-#全属性下RF-ideal-归一化变量
-# MAPE 1.006702
-# RMSE 26.18643
-# R-square 0.9466332
-
 #全属性下RF-ideal-完全归一化/反归一化
-# MAPE 0.06491564 / 0.06437572
-# RMSE 0.03015491 / 18.81929
-# R-square 0.9525207 / 0.9724371
+# MAPE 0.06484222 / 0.06422601
+# RMSE 0.03012926 / 18.83857
+# R-square 0.9525762 / 0.9723243
 
 #全属性下RF-ideal-完全归一化/反归一化 + SVM使用预测误差
 # MAPE 0.0651106 / 0.06451802
 # RMSE 0.03021496 / 18.88092
 # R-square 0.9523314 / 0.9722563
+
 
 
 ####汇总随机森林得出的重要性####
@@ -244,7 +223,7 @@ stat.hznu.area.predict.energyFactor.eva<-stat.hznu.area.predict.energyFactor.eva
                                             .[,.(rlatIncMSE=sum(IncMSE),rlatIncPur=sum(IncPur)),by=labelSeasonType]%>% #汇总统计各季节指标总和
                                             merge(y=.,x=stat.hznu.area.predict.energyFactor.eva,by="labelSeasonType",all.x=TRUE)%>% #合并总和指标
                                             mutate(.,rlatIncMSE=IncMSE/rlatIncMSE,rlatIncPur=IncPur/rlatIncPur)%>%as.data.table(.) #将总和指标转变为占比
-write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量及使用误差筛选_归一化后.xlsx")
+write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量？_归一化后.xlsx")
 
 nn<-data.table(type=c("a","a","b"),p=c(10,90,10))
 nn$port<-nn[,apply(.,MARGIN = 1,FUN = function(x){return(x[2]/sum())})]
@@ -264,6 +243,13 @@ predictElecAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour",
                       Transition=c("d1_ltMeRatio","d7_lowEnergyRatio","stdRhOut"),
                       Summer_warm=c("d7h0_modiElecStd","d1_ltMeRatio","d1_ltMeRatio"),
                       Summer=c("stdWindSpeed","d1_ltMeRatio"))
+#严格版
+predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2"),"_modiElecStd",sep="")),#"stdWeekday","isBizday",
+                      Winter=c("stdOutTemp","d1h0_modiElecStd"),
+                      Winter_warm=c("stdOutTemp","d2h0_modiElecStd","d7h0_modiElecStd","d1h0_modiElecStd"),
+                      Transition=c("stdOutTemp","d7h0_modiElecStd"),
+                      Summer_warm=c("stdOutTemp","d1h0_modiElecStd","d7h0_modiElecStd"),
+                      Summer=c("d1h0_modiElecStd","d1_ltMeRatio"))
 
 ####SVM初始预测####
 #取RF预测的基本误差
@@ -358,6 +344,11 @@ getRSquare(pred = data.hznu.area.predict.use$svmInitIdeaElecDeNorm,ref = data.hz
 # R-square 0.9588439 / 0.9762337
 
 
+# 增强严格属性下SVMinit-ideal-完全归一化/反归一化
+# MAPE 0.05898961 / 0.05909579
+# RMSE 0.02806523 / 17.58568
+# R-square 0.9588973 / 0.9758866
+
 ####能耗预测SVM增强####
 #增加SVM初始预测误差作为输入
 
@@ -398,7 +389,7 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,svmIterIdeaEl
 for(season in unique(data.hznu.area.predict.use$modiSeason)){
   for(type in c("real","ideal")){
     for(round in 0:9){
-      seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
+      seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],#"isBizday","stdWeekday",
                       ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"),
                       ifelse(type=="real","svmInitRealElec","svmInitIdeaElec"),ifelse(type=="real","h1_errSvmInitReal","h1_errSvmInitIdel"))
       # if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
@@ -453,7 +444,10 @@ getRSquare(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,ref = data.hz
 # R-square 0.9662921 / 0.9807378
 
 
-
+# SVMiter-ideal-完全归一化/反归一化
+# MAPE 0.05429961 / 0.05450339
+# RMSE 0.02528185 / 15.60317
+# R-square 0.9666936 / 0.9810345
 
 
 
@@ -506,7 +500,7 @@ for(i in names(paperTime)){
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
 
 ####绘图输出####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","svmIterIdeaElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))

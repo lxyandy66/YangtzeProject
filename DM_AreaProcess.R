@@ -15,6 +15,7 @@ data.hznu.building.energy<-data.hznu.teaching.energy.std[,c("labelRoomDay","acCo
                                 modiElec=sum(value,na.rm = TRUE)
                                 ),by=labelBuildingHour]#这个数据也要保留着
 
+
 ####能耗数据合并为区域级别####
 data.hznu.area.energy<-data.hznu.building.energy %>% 
                        mutate(.,datetime=as.POSIXct(paste(date,sprintf("%02s:00:00",hour)))) %>%
@@ -85,7 +86,7 @@ data.hznu.area.predict.raw[is.na(modiElec)&substr(date,1,4)=="2017"]$modiElec<-a
                                                             FUN = function(x){
                                                               mean(nn1[hour==hour(as.POSIXct(x))&month==month(as.POSIXct(x))]$modiElec,na.rm = TRUE)
                                                             })
-
+data.hznu.area.predict.raw[rhOut>1]$rhOut<-NA
 
 
 ####加一些辅助变量####
