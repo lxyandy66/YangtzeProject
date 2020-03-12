@@ -124,3 +124,19 @@ write.xlsx(x=nn,file="WJJ_office_hourlyWindow.xlsx")
 ####HZNU教学逐时空调使用概率处理####
 melt(data.hznu.teaching.use[,c("modiSeason",sprintf("h%d",8:22))],id.vars = "modiSeason")%>%
   dcast(.,modiSeason~variable,mean) %>%write.xlsx(x=.,file="HZNU_HourlyACUsedRate.xlsx")
+
+
+####平台能耗预测数据导出，仅供测试用####
+data.plfm.hznu.energy.hourly<-data.hznu.building.energy[,-c("labelBuildingHour","count")]
+data.plfm.hznu.energy.hourly$datetime<-as.POSIXct(paste("2020",
+                                                        substring(data.plfm.hznu.energy.hourly$date,5),
+                                                        sprintf(" %02s:00",data.plfm.hznu.energy.hourly$hour),sep = "")) %>%as.character(.)
+write.xlsx(data.plfm.hznu.energy.hourly[buildingCode=="330100D273",c("datetime","buildingCode","modiElec")]%>%
+             cbind(.,dataType="hour") %>%as.data.table(.) %>%.[!duplicated(.$datetime)],file = "HZNU_PLFM_EnergyPredict.xlsx")
+
+
+
+
+
+
+
