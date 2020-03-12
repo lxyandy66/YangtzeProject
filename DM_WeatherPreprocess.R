@@ -223,6 +223,20 @@ data.weather.airport.final[,c("datetime","outTemp","dewTemp","rhOut","windDir","
 save(data.weather.airport.final,data.weather.airport.raw.merge,file="HZ_2016-2019机场逐时气象.rdata")
 #全球气象数据机场最终：data.weather.airport.final
 
+####计算季度的数据####
+data.weather.airport.seasonal<-apply(data.weather.airport.final[,"datetime"],MARGIN = 1,
+                                                                    FUN = function(x){
+                                                                      modiSeason<-getSeason(as.numeric(substr(x,6,7))) 
+                                                                      if(modiSeason %in% c("Spring","Autumn")){
+                                                                        return("Transition")
+                                                                      }else
+                                                                        return(modiSeason)
+                                                                    }) %>% 
+                               mutate(data.weather.airport.final,modiSeason=.) %>% as.data.table(.)%>%
+                               .[,.(count=length(labelHour),
+                                    meanOutTemp=mean(outTemp,na.rm = TRUE),
+                                    meanRhOut=mean(rhOut[rhOut<1],na.rm = TRUE),
+                                    meanWindSpeed=mean(windSpeed,na.rm = TRUE)),by=modiSeason]
 
 ####ZYP大棚辐射数据####
 data.weather.zyp.raw<-data.table(read.csv(file = "粗处理_2018太阳辐射（截至6.14）.csv"))

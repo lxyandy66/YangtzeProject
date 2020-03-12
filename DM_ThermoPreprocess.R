@@ -146,6 +146,36 @@ save(data.hznu.teaching.all,file = "HZNU_含追加_仅教学_能耗热环境已清洗_长数据.r
 data.hznu.teaching.all$on_off<-as.factor(data.hznu.teaching.all$on_off)
 ggplot(data=data.hznu.teaching.all[finalState%in% c("cooling","heating","off")],aes(x=modiTemp,color=modiSeason,fill=on_off,linetype=on_off))+geom_density(alpha=0.3)#+facet_wrap(~finalState)
 
+
+####热环境特征分析#####
+#空调开启与不开启的温度分布密度图
+data.hznu.teaching.all$modiSeason<-factor(data.hznu.teaching.all$modiSeason,
+                                          levels = c("Summer","Summer_warm","Transition","Winter_warm","Winter"))
+
+ggplot(data = data.hznu.teaching.all,aes(x=modiTemp,color=modiSeason,lty=modiSeason,shape=modiSeason))+
+  geom_density()+facet_wrap(~as.factor(on_off),nrow=2)+scale_fill_brewer(palette="Greys")+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.15,0.85))
+
+##不同季节室内温度、室外温度、设定温度分布
+ggplot(data = data.hznu.teaching.all[finalState%in%c("cooling","heating","off")],
+       aes(x=modiSeason,y=modiTemp))+geom_boxplot(width=0.5,outlier.color = NA)+
+  stat_summary(fun.y =mean,geom = "point")+stat_summary(fun.y =mean,geom = "line",group=1)+
+  stat_summary(aes(y=set_temp,color="blue",size=0.5),fun.y =mean,geom = "point",shape=1)+
+  stat_summary(aes(y=set_temp,color="blue"),fun.y =mean,geom = "line",group=1)+
+  geom_line(data = data.weather.airport.seasonal%>%mutate(.,finalState="off"),aes(x=modiSeason,y=meanOutTemp,group=1),color="blue")+
+  geom_point(data = data.weather.airport.seasonal%>%mutate(.,finalState="off"),aes(x=modiSeason,y=meanOutTemp,size=0.5),shape=2,color="blue")+
+  facet_wrap(~factor(finalState,levels = c("cooling","off","heating")),nrow=1)+
+  theme_bw()+theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                   axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))
+#统计相应数据，直接保存至excel中
+stat.hznu.thermo.room<-data.hznu.teaching.all[finalState%in%c("cooling","heating","off"),
+                           .(modiSeason=modiSeason[1],
+                             finalState=finalState[1],
+                             count=length(time),
+                             meanInTemp=mean(modiTemp,na.rm = TRUE),
+                             meanSetTemp=mean(set_temp[!is.nan(set_temp)],na.rm = TRUE)
+                             ),by=paste(modiSeason,finalState)]
+
 ####输出labelRoomDay的日均设定温度####
 data.hznu.teaching.thermo.setTemp<-data.hznu.teaching.thermo.day.long[,.(date=date[1],
                                                                          setTemp=mean(set_temp[on_off==1],na.rm = TRUE)),by=labelRoomDay]
