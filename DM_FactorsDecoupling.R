@@ -1,4 +1,4 @@
-####影响因素解耦部分####
+####能耗影响三因素解耦部分####
 
 # data.hznu.use.final 行为已聚类数据
 # data.hznu.teaching.energy.std 能耗已聚类数据
@@ -361,9 +361,26 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
   write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round_final.xlsx",sep = "_"))
 }
 
+####批量输出决策树规则####
+sink(file = "HZNU_decoupling_rules.txt") 
+for(i in names(list.hznu.decoupling.cart)){
+  for(j in names(list.hznu.decoupling.cart[[i]])){
+    list.hznu.decoupling.cart[[i]][[j]][["holdOut"]]
+  }
+}
+sink() 
 
 
-prp(list.hznu.decoupling.cart$cooling$Forenoon$holdOut,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05,cex=1.5)
+for(i in names(list.hznu.decoupling.cart)){
+  for(j in names(list.hznu.decoupling.cart[[i]]))
+    capture.output(cat("\n",i,j,"\n"),
+                   list.hznu.decoupling.cart[[i]][[j]][["holdOut"]],
+                   file="HZNU_decoupling_rules.txt",append = TRUE)
+}
+  
+
+
+# prp(list.hznu.decoupling.cart$cooling$Forenoon$holdOut,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05,cex=1.5)
 
 ####获取不同空调数对应的面积等级####
 getAreaLevel<-function(acCount){

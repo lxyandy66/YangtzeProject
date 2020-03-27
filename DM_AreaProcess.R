@@ -3,6 +3,7 @@
 #接
 # data.hznu.all.use（宽数据要处理成逐时的）
 # data.hznu.teaching.energy.std（宽数据要处理成逐时的）
+# data.hznu.teaching.all 热环境、设定温度#注意这一部分预处理有点问题
 
 ####能耗数据合并为建筑级别####
 data.hznu.building.energy<-data.hznu.teaching.energy.std[,c("labelRoomDay","acCount","date","buildingCode","finalState",sprintf("h%d",8:22))]%>%
@@ -23,6 +24,16 @@ data.hznu.area.energy<-data.hznu.building.energy %>%
                             count=sum(count,na.rm=TRUE),
                             buildingCount=length(unique(buildingCode)),
                             modiElec=sum(modiElec,na.rm = TRUE)),by=datetime]
+
+####温度相关数据合并成区域级别####
+# 非要加我能怎么办
+data.hznu.area.thermal<-data.hznu.teaching.all[,.(modiSeason=modiSeason[1],
+                                                  count=length(unique(roomCode)),
+                                                  modiElec=sum(modifyElec[on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
+                                                  set_temp=mean(set_temp[set_temp>0&!is.nan(set_temp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
+                                                  modiTemp=mean(modiTemp[modiTemp>0&!is.nan(modiTemp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE)
+                                                  ),by=date]
+data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .)))%>%data.table(.)
 
 ####行为合并至逐时建筑级长数据####
 data.hznu.building.use<-data.hznu.all.use[runtime!=15,c("labelRoomDay","roomCode","date","finalState","acCount","runtime",sprintf("h%d",8:22))] %>% 
@@ -98,6 +109,13 @@ info.hznu.holiday<-as.data.table(read.xlsx(file="HZNU_HolidayList.xlsx",sheetInd
 data.hznu.area.predict.raw$isWeekday<-isWeekday(data.hznu.area.predict.raw$date)
 data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,y=info.hznu.holiday[,c("date","isBizday")],all.x = TRUE,by.x="date",by.y="date") #逻辑操作
 data.hznu.area.predict.raw[is.na(isBizday)]$isBizday<-data.hznu.area.predict.raw[is.na(isBizday)]$isWeekday
+
+data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
+data.hznu.area.predict.raw$d1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
+data.hznu.area.predict.raw$d7_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
+                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=7*24*3600)
 
 
 ####单独取出数据集进行显著性测试####
@@ -313,6 +331,12 @@ for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
 
+####加入室内温度、空调设定温度等相关数据####
+# 她要加就加呗我能怎么办我也很无奈啊
+
+
+
+
 ####按logistics循环统计变量显著性####
 rm(stat.hznu.area.predict.sign)
 for(i in c("stdModiElec")){#,"fullOnRatio"
@@ -350,12 +374,6 @@ for(i in c("stdModiElec")){#,"fullOnRatio"
 write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Energy_AttrSign_final.xlsx")
 
 
-data.hznu.area.predict.raw$h1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
-                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
-data.hznu.area.predict.raw$d1_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
-                                          FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=1*24*3600)
-data.hznu.area.predict.raw$d7_Elec<-apply(X=data.hznu.area.predict.raw[,"datetime"], MARGIN = 1, 
-                                  FUN = getIntervalData,data=data.hznu.area.predict.raw,timeColName="datetime",targetColName="modiElec",timeInvl=7*24*3600)
 
 ####统计数据情况####
 stat.hznu.area.completeCheck<-data.table(date=strptime("2016-12-07","%Y-%m-%d")+24*3600*0:850)
