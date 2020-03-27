@@ -27,12 +27,13 @@ data.hznu.area.energy<-data.hznu.building.energy %>%
 
 ####温度相关数据合并成区域级别####
 # 非要加我能怎么办
-data.hznu.area.thermal<-data.hznu.teaching.all[,.(modiSeason=modiSeason[1],
+data.hznu.area.thermal<-data.hznu.teaching.all[,.(date=date[1],
+                                                  modiSeason=modiSeason[1],
                                                   count=length(unique(roomCode)),
                                                   modiElec=sum(modifyElec[on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
                                                   set_temp=mean(set_temp[set_temp>0&!is.nan(set_temp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
                                                   modiTemp=mean(modiTemp[modiTemp>0&!is.nan(modiTemp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE)
-                                                  ),by=date]
+                                                  ),by=(datetime=time)]
 data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .)))%>%data.table(.)
 
 ####行为合并至逐时建筑级长数据####
