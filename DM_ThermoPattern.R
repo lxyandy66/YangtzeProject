@@ -207,21 +207,46 @@ data.hznu.teaching.thermo.final$thermoPattern<-apply(data.hznu.teaching.thermo.f
 save(data.hznu.teaching.thermo.final,
      list.hznu.teaching.thermo,file = "HZNU_含追加_房间级_教学_热环境聚类完成.rdata")
 
+
+####加入event中参数####
+data.hznu.teaching.thermo.final[,c("eventCount","meanEventRuntime")]<-NULL
+nn<-data.hznu.teaching.event[runtime<24,
+                             .(eventCount=length(onTime),
+                               meanSetTemp=mean(setTemp,na.rm = TRUE),
+                               meanEventRuntime=mean(runtime,na.rm = TRUE)),by=labelRoomDay]
+ggplot(nn[eventCount<5],aes(x=as.factor(eventCount),y=meanEventRuntime))+geom_boxplot()
+
+data.hznu.teaching.thermo.final<-data.hznu.teaching.event[runtime<24,
+                                                          .(eventCount=length(onTime),
+                                                            meanEventRuntime=mean(runtime,na.rm = TRUE),
+                                                            meanSetTemp=mean(setTemp,na.rm = TRUE)),by=labelRoomDay]%>%
+                                 merge(x=data.hznu.teaching.thermo.final,y=.,all.x = TRUE,by.x = "labelRoomDay",by.y = "labelRoomDay")
+
+ggplot(data = data.hznu.teaching.thermo.final[eventCount>0],aes(x=thermoPattern,fill=as.factor(eventCount)))+geom_bar(position = "fill")+facet_wrap(~finalState)
+
+data.hznu.teaching.thermo.final[,.(eventCount=mean(eventCount,na.rm = TRUE)),by=paste(finalState,thermoPattern)]
+
+ggplot(data = data.hznu.teaching.thermo.final,aes(x=thermoPattern,y=meanEventRuntime))+geom_boxplot()+stat_summary(fun.y = mean,geom = "point")+facet_wrap(~finalState)
+
+
 ####按制冷和制热统计各模式的情况####
 # stat.hznu.thermo.descr.byMode<-
 data.hznu.teaching.thermo.final[,.(
   finalState=finalState[1],
   thermoPattern=thermoPattern[1],
   count=length(labelRoomDay),
+  # eventCount=mean(eventCount,na.rm = TRUE),
   runtime=mean(runtime,na.rm = TRUE),
+  # meanEventRuntime=mean(meanEventRuntime,na.rm = TRUE),
+  # meanSetTemp=mean(meanSetTemp,na.rm = TRUE),
   range=mean(range,na.rm = TRUE),
   lowRatioValue=mean(lowRatioValue,na.rm = TRUE),
-  meanSd=mean(sd,na.rm = TRUE)
-  # meanSetTemp=mean(setTemp,na.rm = TRUE)#设定温度似乎没很大规律性
-),by=(labelModeThermoPattern<-paste(finalState,thermoPattern,sep = "_"))] %>% 
+  meanSd=mean(sd,na.rm = TRUE),
+  meanSetTemp=mean(meanSetTemp,na.rm = TRUE)#设定温度似乎没很大规律性
+),by=(labelModeThermoPattern<-paste(finalState,thermoPattern,sep = "_"))] #%>% 
   write.xlsx(x=.,file="HZNU_ThermoPattern_Evaluate_byMode.xlsx")
 
-data.hznu.teaching.thermo.final[,.(
+nn<-data.hznu.teaching.thermo.final[,.(
   modiSeason=modiSeason[1],
   finalState=finalState[1],
   thermoPattern=thermoPattern[1],
@@ -230,9 +255,9 @@ data.hznu.teaching.thermo.final[,.(
   meanTemp=mean(meanTemp,na.rm = TRUE),
   range=mean(range,na.rm = TRUE),
   lowRatioValue=mean(lowRatioValue,na.rm = TRUE),
-  sd=mean(sd,na.rm = TRUE)
-  # meanSetTemp=mean(setTemp,na.rm = TRUE)#设定温度似乎没很大规律性
-),by=(labelSeasonModeThermoPattern<-paste(modiSeason,finalState,thermoPattern,sep = "_"))] %>% 
+  sd=mean(sd,na.rm = TRUE),
+  meanSetTemp=mean(meanSetTemp,na.rm = TRUE)#设定温度似乎没很大规律性
+),by=(labelSeasonModeThermoPattern<-paste(modiSeason,finalState,thermoPattern,sep = "_"))] #%>% 
   write.xlsx(x=.,file="HZNU_ThermoPattern_Evaluate_bySeason.xlsx")
 
 nn1<-t(data.hznu.teaching.thermo.day.final.modify[labelRoomDay=="330100D255102_2017-09-04",c(sprintf("modH%02d",8:22))])

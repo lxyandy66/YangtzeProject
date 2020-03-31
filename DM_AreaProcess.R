@@ -33,7 +33,7 @@ data.hznu.area.thermal<-data.hznu.teaching.all[,.(modiSeason=modiSeason[1],
                                                   set_temp=mean(set_temp[set_temp>0&!is.nan(set_temp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
                                                   modiTemp=mean(modiTemp[modiTemp>0&!is.nan(modiTemp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE)
                                                   ),by=date]
-data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .)))%>%data.table(.)
+data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .)))%>%mutate(datetime=as.POSIXct(datetime))%>%data.table(.)
 
 ####行为合并至逐时建筑级长数据####
 data.hznu.building.use<-data.hznu.all.use[runtime!=15,c("labelRoomDay","roomCode","date","finalState","acCount","runtime",sprintf("h%d",8:22))] %>% 
@@ -77,7 +77,7 @@ data.hznu.area.predict.raw<-merge(x=data.hznu.area.predict.raw,
                                   y=data.weather.airport.final[!duplicated(data.weather.airport.final[,"datetime"]),
                                                                c("datetime","outTemp","rhOut","windSpeed","weather")],
                                   all.x = TRUE,by.x = "datetime",by.y = "datetime")
-
+###还应合并热环境相关，目前直接在后面合并
 
 ####能耗基本缺失值处理####
 # 切记最好应该统一处理！！
@@ -250,7 +250,7 @@ data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Tran
 hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")#"r1h0",
 patternRatioName<-c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio")
 energyPatternRatioName<-c("lowEnergyRatio","midEnergyRatio","ltMeRatio","ltHeRatio")
-signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday"),#
+signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday","d0h1_modiTempStd","d0h1_setTempStd"),#
                fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
                # dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
                stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
@@ -323,23 +323,69 @@ nn[,1:3]<-apply(X = nn[,1:3],MARGIN = 1,
 
 data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start = 1)
 backup.hznu.area.signCheck<-data.hznu.area.signCheck
+####加入室内温度、空调设定温度等相关数据####
+# 她要加就加呗我能怎么办我也很无奈啊
+data.hznu.area.signCheck<-merge(x=data.hznu.area.signCheck,y=data.hznu.area.thermal[,c("datetime","set_temp","modiTemp")],all.x = TRUE,by= "datetime")
+
+data.hznu.area.signCheck$d0h1_modiTemp<-apply(data.hznu.area.signCheck[,c("refHour1")],MARGIN = 1,
+                                              FUN = function(x){
+                                                return(data.hznu.area.signCheck[datetime==as.POSIXct(x)]$modiTemp[1])
+                                              })
+data.hznu.area.signCheck$d0h1_setTemp<-apply(data.hznu.area.signCheck[,c("refHour1")],MARGIN = 1,
+                                              FUN = function(x){
+                                                return(data.hznu.area.signCheck[datetime==as.POSIXct(x)]$set_temp[1])
+                                              })
+
 
 ####按季节归一化####
 data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
-data.hznu.area.signCheck.pickup$stdModiElec<- -999
+data.hznu.area.signCheck.pickup[,c("stdModiElec","d0h1_modiTempStd","d0h1_setTempStd")]<- -999
 for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
+  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_modiTempStd<-normalize(data.hznu.area.predict.use[modiSeason==i,"d0h1_modiTemp"],
+                                                                        upper = 0.9,lower = 0.1,intercept = 0.1)
+  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_setTempStd<-normalize(data.hznu.area.predict.use[modiSeason==i,"d0h1_setTemp"],
+                                                                       upper = 0.9,lower = 0.1,intercept = 0.1)
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
 
-####加入室内温度、空调设定温度等相关数据####
-# 她要加就加呗我能怎么办我也很无奈啊
 
 
+####按perason循环统计变量显著性####
+rm(stat.hznu.area.cor)
+for(i in c("fullOnRatio","stdModiElec")){#
+  for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
+    for(k in c("weatherAttr","hst","patternRatio","energyPatternRatio","useHst")){
+      #根据目前循环分组选取适合公式 #我觉得可以简化一下
+      if(k=="useHst"){#useHst仅对能耗模式考虑，因此提前判断
+        if(i=="stdModiElec"){
+          attr<-c(signAttr[["fullOnRatio"]],"fullOnRatio")
+        }#计算能耗显著性时考虑历史空调使用率时仍包括此刻的空调使用率，在实际模型中该值来源于预测
+        else
+          next#只针对能耗显著性才考虑行为的影响
+      }
+      else{
+        if(k=="hst")
+          attr<-signAttr[[i]]
+        else
+          attr<-signAttr[[k]]
+      }
+      #根据得到的显著性计算formula通过logistics计算显著性
+      nn<-cor(y=data.hznu.area.signCheck.pickup[,..i],x=data.hznu.area.signCheck.pickup[,..attr],method = "spearman",use="complete.obs")
+      if(exists("stat.hznu.area.cor")){
+        stat.hznu.area.cor<-rbind(stat.hznu.area.cor,data.table(target=i,modiSeason=j,attr=k,var=row.names(nn),as.numeric(nn)))
+      }else{
+        stat.hznu.area.cor<-data.table(target=i,modiSeason=j,attr=k,var=row.names(nn),as.numeric(nn))
+      }
+    }
+  }
+}
+write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数.xlsx")
+#真的线性相关太不行了
 
 
 ####按logistics循环统计变量显著性####
 rm(stat.hznu.area.predict.sign)
-for(i in c("stdModiElec")){#,"fullOnRatio"
+for(i in c("fullOnRatio")){#,"stdModiElec"
   for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
     for(k in c("weatherAttr","hst","patternRatio","energyPatternRatio","useHst")){
       #根据目前循环分组选取适合公式 #我觉得可以简化一下
@@ -371,7 +417,7 @@ for(i in c("stdModiElec")){#,"fullOnRatio"
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Energy_AttrSign_final.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final.xlsx")
 
 
 

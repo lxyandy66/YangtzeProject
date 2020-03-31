@@ -42,12 +42,15 @@ ggplot(data=data.hznu.teaching.event[onHour%in% 8:22& !is.na(finalState)],aes(x=
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
 
 #各季节空调开启时长分布
-ggplot(data=data.hznu.teaching.event[onHour%in% 8:22&runtime<18& !is.na(finalState)],aes(x=runtime))+geom_density()+
-  facet_wrap(~finalState+factor(modiSeason,levels = c("Summer","Summer_warm","Winter_warm","Winter","Transition")))+scale_x_continuous(breaks=seq(0,40,2))+
-  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+
+ggplot(data=data.hznu.teaching.event[onHour%in% 8:22&runtime<18& !is.na(finalState) & onTemp<36&onTemp>5],#[!(finalState=="heating"&onTemp>30)],
+       aes(x=factor(modiSeason,levels = c("Summer","Summer_warm","Transition","Winter_warm","Winter")),y = onTemp))+geom_boxplot(width=0.7,outlier.colour = NA)+
+  facet_wrap(~finalState)+scale_y_continuous(breaks=seq(0,50,5))+
+  theme_bw()+theme(axis.text.x = element_text(angle = 45, hjust = 1),axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+
 
 ggplot(data=data.hznu.teaching.event[onHour%in% 8:22&runtime<18& !is.na(finalState)&onTemp<36],aes(x=onTemp))+geom_density()+
-  facet_wrap(~finalState+factor(modiSeason,levels = c("Summer","Summer_warm","Winter_warm","Winter","Transition")))+scale_x_continuous(breaks=seq(0,40,5))+
+  facet_wrap(~finalState+factor(modiSeason))+scale_x_continuous(breaks=seq(0,40,5))+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
 
 

@@ -32,8 +32,10 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
 data.hznu.area.predict.use$weekCount<-isoweek(data.hznu.area.predict.use$datetime)
 
 ####´óÂÛÎÄÓÃÊ±¼äÉ¸Ñ¡####
-paperTime<-list(Summer_warm=c(sprintf("2017-09-%02d",4:17)),
+paperTime<-list(#Summer_warm=c(sprintf("2017-09-%02d",17:30)),
+                Summer_warm=c(sprintf("2017-09-%02d",4:17)),
                 Summer=c(sprintf("2017-07-%02d",3:16)),
+                # Winter_warm=c(sprintf("2017-12-%02d",17:30)),
                 Winter_warm=c(sprintf("2017-12-%02d",11:24)),
                 Winter=c(sprintf("2018-01-%02d",15:28))
                 )
@@ -270,11 +272,13 @@ backup.hznu.area.predict.use<-data.hznu.area.predict.use#2020.02.14 ±¸·ÝÁË8µãÓÃ²
 ####´óÂÛÎÄÓÃÊ±¼äÐòÁÐÐ§¹ûÆÀ¹À####
 for(i in names(paperTime)){
   data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
-      cat("\n",i,": \nMAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$knnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+      
+      cat("\n",i,nrow(.[fullOnRatio==0])/nrow(.),": \nMAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$svmIterPred, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
       cat("\nRMSE\t",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE))#0.022
       cat("\nRSquare\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
-      
-      cat("\n",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),"\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
+      cat("\nMean\t",mean(.$fullOnRatio,na.rm = TRUE))
+      cat("\nMedian\t",median(.$fullOnRatio,na.rm = TRUE))
+      # cat("\n",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),"\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
   }
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio,svmInitPred,svmIterPred
