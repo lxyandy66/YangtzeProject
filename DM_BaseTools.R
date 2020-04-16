@@ -38,6 +38,7 @@ library(knncat)
 library(car)
 library(forecast)
 library(tseries)
+set.seed(711)
 
 ####预处理部分####
 getMode <- function(x,na.rm=FALSE) {

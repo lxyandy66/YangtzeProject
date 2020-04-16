@@ -6,7 +6,7 @@
 # 直接在data.hznu.area.predict.use上进行预测
 
 backup.hznu.area.predict.use<-data.hznu.area.predict.use
-backup.hznu.area.predict.log<-data.hznu.area.predict.log#20200327 保留的未考虑温度等的情况
+backup.hznu.area.predict.log<-data.hznu.area.predict.log#20200416 考虑仅开启的温度
 
 #检查一下signCheck.pickUp和data.hznu.area.predict.use数据集能不能直接cbind
 nn<-data.table(datetimeUse=data.hznu.area.predict.use$datetime,datetimeSign=data.hznu.area.signCheck.pickup$datetime)
@@ -546,9 +546,9 @@ for(i in names(paperTime)){
       # cat("\nMean\t",mean(.$modiElec,na.rm = TRUE))#0.8631175
       # 
       cat("\n",i,"\t",j,"\t",
-          RMSE(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
-          getRSquare(pred = pull(.,ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")),ref = .$modiElec),"\t",
-          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","svmInitRealElecDeNorm","svmInitIdeaElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
+          RMSE(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),ref = .$modiElec),"\t",
+          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
     }
   }
 }
@@ -556,9 +556,21 @@ for(i in names(paperTime)){
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
 
 ####绘图输出####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","rfRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+
+
+
+for(j in names(paperTime)){
+  ggsave(file=paste("modiElec_RF_",j,".png",sep = ""),
+         plot=ggplot(data=data.hznu.area.predict.use[date %in% paperTime[[j]],c("datetime","weekCount","weekday","modiSeason","modiElec","rfIdelElecDeNorm","rfRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+                       mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
+                     aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
+           theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(ifelse(j=="Winter",0.15,0.9),0.85)),
+         width=16,height = 4.8,dpi = 100  
+  )}
+
 
 

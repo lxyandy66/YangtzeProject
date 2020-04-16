@@ -34,7 +34,9 @@ data.hznu.area.thermal<-data.hznu.teaching.all[,.(date=date[1],
                                                   set_temp=mean(set_temp[set_temp>0&!is.nan(set_temp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE),
                                                   modiTemp=mean(modiTemp[modiTemp>0&!is.nan(modiTemp)&on_off==1&finalState%in%c("cooling","heating")],na.rm = TRUE)
                                                   ),by=(datetime=time)]
-data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .)))%>%data.table(.)
+data.hznu.area.thermal<-data.hznu.area.thermal%>%mutate_all(funs(ifelse(is.nan(.),NA, .))) %>% mutate(.,datetime=as.POSIXct(datetime))%>%data.table(.)
+
+
 ####行为合并至逐时建筑级长数据####
 data.hznu.building.use<-data.hznu.all.use[runtime!=15,c("labelRoomDay","roomCode","date","finalState","acCount","runtime",sprintf("h%d",8:22))] %>% 
                     melt(.,id.var=c("labelRoomDay","roomCode","date","finalState","acCount","runtime")) %>% 
@@ -325,16 +327,44 @@ data.hznu.area.signCheck$weekday<-wday(data.hznu.area.signCheck$date,week_start 
 backup.hznu.area.signCheck<-data.hznu.area.signCheck
 ####加入室内温度、空调设定温度等相关数据####
 # 她要加就加呗我能怎么办我也很无奈啊
+# str(data.hznu.area.signCheck)
+data.hznu.area.signCheck[,c("modiTemp","d0h1_modiTemp","set_temp","d0h1_setTemp")]<-NULL
+
 data.hznu.area.signCheck<-merge(x=data.hznu.area.signCheck,y=data.hznu.area.thermal[,c("datetime","set_temp","modiTemp")],all.x = TRUE,by= "datetime")
 
 data.hznu.area.signCheck$d0h1_modiTemp<-apply(data.hznu.area.signCheck[,c("refHour1")],MARGIN = 1,
                                               FUN = function(x){
                                                 return(data.hznu.area.signCheck[datetime==as.POSIXct(x)]$modiTemp[1])
                                               })
+data.hznu.area.signCheck[hour(datetime)==8]$d0h1_modiTemp<-apply(data.hznu.area.signCheck[hour(datetime)==8,c("refHour1","isBizday")],MARGIN = 1,
+                                                                FUN = function(x){
+                                                                  if(anyNA(x))
+                                                                    return(NA)
+                                                                  if(as.logical(gsub(" ","",x[2]))){
+                                                                    #如果是工作日则取前一天均值
+                                                                    return(mean(data.hznu.area.signCheck[date==substr(x[1],1,10)]$d0h1_modiTemp,na.rm = TRUE))
+                                                                  }else{
+                                                                    #如果是非工作日则取前一天8h
+                                                                    return(data.hznu.area.signCheck[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$d0h1_modiTemp[1])
+                                                                  }
+                                                                })
+
 data.hznu.area.signCheck$d0h1_setTemp<-apply(data.hznu.area.signCheck[,c("refHour1")],MARGIN = 1,
                                               FUN = function(x){
                                                 return(data.hznu.area.signCheck[datetime==as.POSIXct(x)]$set_temp[1])
                                               })
+data.hznu.area.signCheck[hour(datetime)==8]$d0h1_setTemp<-apply(data.hznu.area.signCheck[hour(datetime)==8,c("refHour1","isBizday")],MARGIN = 1,
+                                                                 FUN = function(x){
+                                                                   if(anyNA(x))
+                                                                     return(NA)
+                                                                   if(as.logical(gsub(" ","",x[2]))){
+                                                                     #如果是工作日则取前一天均值
+                                                                     return(mean(data.hznu.area.signCheck[date==substr(x[1],1,10)]$d0h1_setTemp,na.rm = TRUE))
+                                                                   }else{
+                                                                     #如果是非工作日则取前一天8h
+                                                                     return(data.hznu.area.signCheck[datetime==as.POSIXct(paste(substr(x[1],1,10),"08:00:00"))]$d0h1_setTemp[1])
+                                                                   }
+                                                                 })
 
 
 ####按季节归一化####
@@ -379,7 +409,7 @@ for(i in c("fullOnRatio","stdModiElec")){#
     }
   }
 }
-write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数.xlsx")
+write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数_含所有房间.xlsx")
 #真的线性相关太不行了
 
 
@@ -417,7 +447,7 @@ for(i in c("fullOnRatio")){#,"stdModiElec"
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final_含所有房间.xlsx")
 
 
 
