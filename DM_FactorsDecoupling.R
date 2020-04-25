@@ -382,6 +382,15 @@ for(i in names(list.hznu.decoupling.cart)){
 
 # prp(list.hznu.decoupling.cart$cooling$Forenoon$holdOut,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05,cex=1.5)
 
+
+
+data.hznu.teaching.decoupling[,.(finalState=finalState[1],
+                                 modiSeason=modiSeason[1],
+                                 thermoPattern=thermoPattern[1],
+                                 runtime=mean(runtime,na.rm = TRUE)),by=(labelModeSeasonThermal=paste(finalState,modiSeason,thermoPattern,sep = "_"))]
+
+
+
 ####获取不同空调数对应的面积等级####
 getAreaLevel<-function(acCount){
   if(acCount<=2)

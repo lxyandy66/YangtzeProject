@@ -6,11 +6,13 @@ data.hznu.area.predict.use<-merge(x=data.hznu.area.predict.raw[,c("date","dateti
                                                                      "fullOnRatio","modiElec",
                                                                      "outTemp","rhOut","windSpeed","isWeekday","isBizday")],
                                      y=data.hznu.area.signCheck[,c("datetime","weekday","stdModiElec","modiSeason","hour","refHour1",
+                                                                   "stdOutTemp","stdRhOut","stdWindSpeed","stdWeekday",
+                                                                   "d0h1_modiTemp","d0h1_modiTempStd",
                                                                    "d0h1_FullOnRatio","d1h0_FullOnRatio","d7h0_FullOnRatio",
                                                                    "d1_onDemandRatio","d1_forenoonRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio",
-                                                                   "d7_onDemandRatio","d7_daytimeRatio","d7_afternoonRatio","d7_lateDaytimeRatio")],
+                                                                   "d7_onDemandRatio","d7_daytimeRatio","d7_afternoonRatio","d7_lateDaytimeRatio","d7_forenoonRatio")],
                                      all.x = TRUE,by.x="datetime",by.y="datetime") %>% .[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
-
+data.hznu.area.predict.use$d7_forenoonRatio<-data.hznu.area.signCheck.pickup$d7_forenoonRatio
 
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   cat("\nbox stat in ",i,": ",boxplot.stats(data.hznu.area.predict.use[modiSeason==i]$fullOnRatio)$stats)#0.000000000 0.006578947 median=0.026402640 0.072816246 0.172000000
@@ -74,23 +76,38 @@ data.hznu.area.predict.use[duplicated(data.hznu.area.predict.use$datetime)]
 
 ####¶ÔÓÚÊ®ÕÛµÄ½á¹û½øÐÐµ¥¶À´¢´æ####
 backup.hznu.area.predict.log<-data.hznu.area.predict.log
+
+data.hznu.area.predict.log<-data.hznu.area.predict.log[0]
+
 data.hznu.area.predict.log<-data.table(id=-999,datetime=as.POSIXct("2019-01-09"),modiSeason="modiSeason",
                                        target="targetResult,fullOnRatio,etc.",method="knn/svm/etc",setType="train/test",
                                        round=-999,predValue=-999,realValue=-999)[-1]
 archieveItem<-names(data.hznu.area.predict.log)
 
 ####ÊÔÒ»ÊÔKNN####
-#Ôö¼ÓÒ»¸öIDÐÐºÅ±ãÓÚÊ®ÕÛ
 
-data.hznu.area.predict.use<-data.hznu.area.predict.use %>% 
-                            mutate(.,id=1:nrow(.),knnFullOnRatio=-999,simpleKnnFullOnRatio= -999)
 
+# Ô­Ê¼
 predictUsageAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"),
                        Winter=c("d1h0_FullOnRatio","d1_onDemandRatio","d1_forenoonRatio","d1_daytimeRatio","d7_onDemandRatio","d7_daytimeRatio"),
                        Winter_warm=c("stdRhOut","d7h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
                        Transition=c("stdRhOut","d1h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
                        Summer_warm=c("d7h0_FullOnRatio","d1_lateDaytimeRatio","d7_daytimeRatio","d1_lateDaytimeRatio"),
                        Summer=c("stdWindSpeed","d1h0_FullOnRatio","d7_onDemandRatio","d7_daytimeRatio"))
+
+# #°ëÑÏ¸ñ
+# 
+predictUsageAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour","d0h1_FullOnRatio"),
+                       Winter=c("d1h0_FullOnRatio","d1_onDemandRatio","d7_onDemandRatio","d7_daytimeRatio"),
+                       Winter_warm=c("d1h0_FullOnRatio","d7h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d7_forenoonRatio"),
+                       Transition=c("stdRhOut","d1h0_FullOnRatio","d1_onDemandRatio","d1_afternoonRatio","d1_daytimeRatio","d1_lateDaytimeRatio","d7_onDemandRatio","d7_afternoonRatio"),
+                       Summer_warm=c("d7h0_FullOnRatio","d1_lateDaytimeRatio",
+                                     "d1_forenoonRatio","d7_forenoonRatio"),
+                       Summer=c("d1h0_FullOnRatio","stdWindSpeed","d7_onDemandRatio","d7_forenoonRatio","d7_daytimeRatio"))
+
+#Ôö¼ÓÒ»¸öIDÐÐºÅ±ãÓÚÊ®ÕÛ
+data.hznu.area.predict.use<-data.hznu.area.predict.use %>% 
+  mutate(.,id=1:nrow(.),knnFullOnRatio=-999,simpleKnnFullOnRatio= -999)
 
 data.hznu.area.predict.use<-as.data.table(data.hznu.area.predict.use)
 # cat( system.time(
@@ -142,6 +159,8 @@ getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hzn
 backup.hznu.area.predict.log<-data.hznu.area.predict.log
 
 # data.hznu.area.predict.log<-backup.hznu.area.predict.log #¸´Î»
+data.hznu.area.predict.use[,c("errBase","h1_errBase")]<-NULL
+
 data.hznu.area.predict.use$errBase<-(data.hznu.area.predict.use$simpleKnnFullOnRatio-data.hznu.area.predict.use$fullOnRatio)
 
 
@@ -161,7 +180,7 @@ data.hznu.area.predict.use[hour(datetime)==8]$h1_errBase<-apply(data.hznu.area.p
                                                         }
                                                         })
 data.hznu.area.predict.use[,c("errBase","h1_errBase")]<-data.hznu.area.predict.use[,c("errBase","h1_errBase")]%>%mutate_all(funs(ifelse(is.nan(.), NA, .)))
-nn<-data.hznu.area.predict.use[,c("datetime","errBase","h1_errBase")]
+# nn<-data.hznu.area.predict.use[,c("datetime","errBase","h1_errBase")]
 
 data.hznu.area.predict.use$svmInitPred<- -999
 
@@ -206,6 +225,7 @@ getRSquare(pred = data.hznu.area.predict.use$svmInitPred,ref = data.hznu.area.pr
 
 
 #Ôö¼ÓSVM³õÊ¼Ô¤²âÎó²î×÷ÎªÊäÈë
+data.hznu.area.predict.use[,c("errSvm","h1_errSvm")]<-NULL
 
 data.hznu.area.predict.use$errSvm<-(data.hznu.area.predict.use$svmInitPred-data.hznu.area.predict.use$fullOnRatio)
 
@@ -225,8 +245,6 @@ data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvm<-apply(data.hznu.area.pr
                                                                   }
                                                                 })
 data.hznu.area.predict.use[,c("errSvm","h1_errSvm")]<-data.hznu.area.predict.use[,c("errSvm","h1_errSvm")]%>%mutate_all(funs(ifelse(is.nan(.), NA, .)))
-nn<-data.hznu.area.predict.use[,c("datetime","isBizday","errSvm","h1_errSvm")]
-
 
 data.hznu.area.predict.use$svmIterPred<- -999
 
@@ -272,13 +290,10 @@ backup.hznu.area.predict.use<-data.hznu.area.predict.use#2020.02.14 ±¸·ÝÁË8µãÓÃ²
 ####´óÂÛÎÄÓÃÊ±¼äÐòÁÐÐ§¹ûÆÀ¹À####
 for(i in names(paperTime)){
   data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
-      
-      cat("\n",i,nrow(.[fullOnRatio==0])/nrow(.),": \nMAPE\t",getMAPE(yPred = .[fullOnRatio!=0]$svmIterPred, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
-      cat("\nRMSE\t",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE))#0.022
-      cat("\nRSquare\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
-      cat("\nMean\t",mean(.$fullOnRatio,na.rm = TRUE))
-      cat("\nMedian\t",median(.$fullOnRatio,na.rm = TRUE))
-      # cat("\n",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),"\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio))#0.8631175
+      cat("\n",i,
+          "\t",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),
+          "\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio),
+          "\t",getMAPE(yPred = .[fullOnRatio!=0]$svmIterPred, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
   }
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio,svmInitPred,svmIterPred

@@ -32,7 +32,7 @@ library(magrittr)
 library(lubridate)
 library(RWeka)
 library(class)
-# library(Hmisc)
+library(Hmisc)
 library(kknn)
 library(knncat)
 library(car)
@@ -527,4 +527,20 @@ getPreviousCataData<-function(thisTime,data,timeColName,targetColName,flagColNam
   }
 }
 
+# ++++++++++++++++++++++++++++
+
+# flattenCorrMatrix
+# cormat : matrix of the correlation coefficients
+# pmat : matrix of the correlation p-values
+# 用于将rcor生成的相关系数加入显著性指标
+# Usage:
+# res3 <- rcorr(as.matrix(mtcars[,1:7]))
+# flattenCorrMatrix(res3$r, res3$P)
+
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat) 
+  data.frame(row = rownames(cormat)[row(cormat)[ut]],
+             column = rownames(cormat)[col(cormat)[ut]], cor =(cormat)[ut], p = pmat[ut] )
+  
+}
 

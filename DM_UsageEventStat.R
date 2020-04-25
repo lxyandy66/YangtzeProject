@@ -25,8 +25,10 @@ data.hznu.teaching.event$modiSeason<-apply(X = data.hznu.teaching.event[,"onTime
                                              temp<-getSeason(as.numeric(substr(x,6,7)))
                                              return(ifelse(temp %in% c("Spring","Autumn"),"Transition",temp))
                                            })
-#开启所在小时
+#开关所在小时
 data.hznu.teaching.event$onHour<-hour(data.hznu.teaching.event$onTime)
+data.hznu.teaching.event$offHour<-hour(data.hznu.teaching.event$offTime)
+
 #空调运行工况
 data.hznu.teaching.event<-data.hznu.teaching.event%>%mutate(.,labelRoomDay=paste(roomCode,date(onTime),sep = "_"))%>%
                           merge(x=.,y = data.hznu.teaching.energy.std[,c("labelRoomDay","finalState")],all.x = TRUE,
@@ -36,9 +38,16 @@ data.hznu.teaching.event[is.na(finalState)& modiSeason%in% c("Winter","Winter_wa
 
 ####对结果进行可视化的分析####
 #各季节空调开启动作时间分布
-ggplot(data=data.hznu.teaching.event[onHour%in% 8:22& !is.na(finalState)],aes(x=onHour,lty=modiSeason,fill=modiSeason))+geom_density(size=0.5,alpha=0.25)+
+ggplot(data=data.hznu.teaching.event[year(onTime)%in%2016:2017&onHour%in% 8:22& !is.na(finalState)],aes(x=onHour,lty=modiSeason,fill=modiSeason,shape=modiSeason))+
+  geom_density(size=0.5,alpha=0.25)+
   scale_x_continuous(breaks=seq(0,25,2))+facet_wrap(~finalState,nrow=2)+
-  scale_fill_brewer(palette="Greys")+scale_color_brewer(palette="Greys")+
+  scale_color_brewer(palette="Greys")+#scale_fill_brewer(palette="Greys")+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+
+ggplot(data=data.hznu.teaching.event[onHour%in% 8:22& !is.na(finalState)],aes(x=onHour,lty=modiSeason,fill=modiSeason,shape=modiSeason,color=modiSeason))+
+  stat_density(geom="point")+
+  scale_x_continuous(breaks=seq(0,25,2))+facet_wrap(~finalState,nrow=2)+
+  # scale_fill_brewer(palette="Greys")+scale_color_brewer(palette="Greys")+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
 
 #各季节空调开启时长分布

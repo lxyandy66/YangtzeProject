@@ -252,7 +252,7 @@ data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Tran
 hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")#"r1h0",
 patternRatioName<-c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio")
 energyPatternRatioName<-c("lowEnergyRatio","midEnergyRatio","ltMeRatio","ltHeRatio")
-signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday","d0h1_modiTempStd","d0h1_setTempStd"),#
+signAttr<-list(weatherAttr=c("stdOutTemp","stdRhOut","stdWindSpeed","stdWeekday","isBizday","d0h1_modiTempStd","stdHour"),#
                fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
                # dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
                stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
@@ -369,14 +369,24 @@ data.hznu.area.signCheck[hour(datetime)==8]$d0h1_setTemp<-apply(data.hznu.area.s
 
 ####按季节归一化####
 data.hznu.area.signCheck.pickup<-data.hznu.area.signCheck[substr(date,1,4)=="2017"|substr(date,1,7)=="2018-01"]
-data.hznu.area.signCheck.pickup[,c("stdModiElec","d0h1_modiTempStd","d0h1_setTempStd")]<- -999
+
+data.hznu.area.signCheck.pickup$stdHour<-hour(data.hznu.area.signCheck.pickup$datetime) %>% normalize(.,upper = 0.9,lower = 0.1,intercept = 0.1)
+data.hznu.area.signCheck.pickup<-mutate(data.hznu.area.signCheck.pickup,stdOutTemp= -999,stdRhOut= -999,stdWindSpeed= -999,stdWeekday= -999)
+data.hznu.area.signCheck.pickup$stdWeekday<-normalize(data.hznu.area.signCheck.pickup$weekday,upper = 0.9,lower = 0.1,intercept = 0.1)
+data.hznu.area.signCheck.pickup<-as.data.table(data.hznu.area.signCheck.pickup)#很奇怪会莫名降级
+data.hznu.area.signCheck.pickup[,c("stdModiElec","d0h1_modiTempStd","d0h1_setTempStd","stdOutTemp","stdRhOut","stdWindSpeed")]<- -999
 for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
-  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_modiTempStd<-normalize(data.hznu.area.predict.use[modiSeason==i,"d0h1_modiTemp"],
+  data.hznu.area.signCheck.pickup[modiSeason==i]$stdOutTemp<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i]$outTemp,upper = 0.9,lower = 0.1,intercept = 0.1)
+  data.hznu.area.signCheck.pickup[modiSeason==i]$stdRhOut<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i]$rhOut,upper = 0.9,lower = 0.1,intercept = 0.1)
+  data.hznu.area.signCheck.pickup[modiSeason==i]$stdWindSpeed<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i]$windSpeed,upper = 0.9,lower = 0.1,intercept = 0.1)
+  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_modiTempStd<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"d0h1_modiTemp"],
                                                                         upper = 0.9,lower = 0.1,intercept = 0.1)
-  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_setTempStd<-normalize(data.hznu.area.predict.use[modiSeason==i,"d0h1_setTemp"],
+  data.hznu.area.signCheck.pickup[modiSeason==i]$d0h1_setTempStd<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"d0h1_setTemp"],
                                                                        upper = 0.9,lower = 0.1,intercept = 0.1)
   data.hznu.area.signCheck.pickup[modiSeason==i]$stdModiElec<-normalize(data.hznu.area.signCheck.pickup[modiSeason==i,"modiElec"],upper = 0.9,lower = 0.1,intercept = 0.1)
 }
+
+####按季节归一化对象###
 
 
 
@@ -400,11 +410,12 @@ for(i in c("fullOnRatio","stdModiElec")){#
           attr<-signAttr[[k]]
       }
       #根据得到的显著性计算formula通过logistics计算显著性
-      nn<-cor(y=data.hznu.area.signCheck.pickup[,..i],x=data.hznu.area.signCheck.pickup[,..attr],method = "spearman",use="complete.obs")
+      
+      nn<-corr.test(y=data.hznu.area.signCheck.pickup[,..i],x=data.hznu.area.signCheck.pickup[,..attr],method = "spearman",use = "complete.obs")
       if(exists("stat.hznu.area.cor")){
-        stat.hznu.area.cor<-rbind(stat.hznu.area.cor,data.table(target=i,modiSeason=j,attr=k,var=row.names(nn),as.numeric(nn)))
+        stat.hznu.area.cor<-rbind(stat.hznu.area.cor,data.table(target=i,modiSeason=j,attr=k,var=row.names(nn$r),r=as.numeric(nn$r),sign=nn$ci$p))
       }else{
-        stat.hznu.area.cor<-data.table(target=i,modiSeason=j,attr=k,var=row.names(nn),as.numeric(nn))
+        stat.hznu.area.cor<-data.table(target=i,modiSeason=j,attr=k,var=row.names(nn$r),r=as.numeric(nn$r),sign=nn$ci$p)
       }
     }
   }
@@ -417,7 +428,7 @@ write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数_含所有房间.xlsx")
 rm(stat.hznu.area.predict.sign)
 for(i in c("fullOnRatio")){#,"stdModiElec"
   for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
-    for(k in c("weatherAttr","hst","patternRatio","energyPatternRatio","useHst")){
+    for(k in c("weatherAttr","hst","patternRatio","useHst")){#"energyPatternRatio"
       #根据目前循环分组选取适合公式 #我觉得可以简化一下
       if(k=="useHst"){#useHst仅对能耗模式考虑，因此提前判断
         if(i=="stdModiElec"){
@@ -447,7 +458,7 @@ for(i in c("fullOnRatio")){#,"stdModiElec"
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final_含所有房间.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final_含所有房间_logit_STD.xlsx")
 
 
 

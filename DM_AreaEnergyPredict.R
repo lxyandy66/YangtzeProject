@@ -6,7 +6,7 @@
 # 直接在data.hznu.area.predict.use上进行预测
 
 backup.hznu.area.predict.use<-data.hznu.area.predict.use
-backup.hznu.area.predict.log<-data.hznu.area.predict.log#20200416 考虑仅开启的温度
+backup.hznu.area.predict.log<-data.hznu.area.predict.log#20200418 考虑全房间的温度
 
 #检查一下signCheck.pickUp和data.hznu.area.predict.use数据集能不能直接cbind
 nn<-data.table(datetimeUse=data.hznu.area.predict.use$datetime,datetimeSign=data.hznu.area.signCheck.pickup$datetime)
@@ -21,13 +21,14 @@ data.hznu.area.predict.use<-cbind(data.hznu.area.predict.use,data.hznu.area.sign
                                                                                                 "d7h0_modiElec","d7h1_modiElec","d7h2_modiElec",
                                                                                          "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
                                                                                          "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio",
-                                                                                         "d0h1_modiTemp","d0h1_setTemp")])
-data.hznu.area.predict.use[,c("d0h1_modiElec","d0h2_modiElec",
-                              "d1h0_modiElec","d1h1_modiElec","d1h2_modiElec",
-                              "d2h0_modiElec","d2h1_modiElec","d2h2_modiElec",
-                              "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
-                              "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio")]<-NULL
+                                                                                         "d0h1_modiTemp","d0h1_setTemp","d0h1_setTempStd","d0h1_modiTempStd")])
 
+
+
+data.hznu.area.predict.use[,c("rfIdelElecDeNorm","rfRealElecDeNorm","rfIdelElec","rfRealElec",
+                              "h1_errRfIdelBase","h1_errRfRealBase","h1_errSvmInitIdel","h1_errSvmInitReal",
+                              "svmInitIdeaElec","svmInitRealElec","svmInitIdeaElecDeNorm","svmInitRealElecDeNorm",
+                              "svmIterIdeaElec","svmIterRealElec","svmIterIdeaElecDeNorm","svmIterRealElecDeNorm")]<-NULL
 
 #之前没归一化吗？？
 data.hznu.area.predict.use[is.na(stdModiElec)&!is.na(modiElec)]
@@ -148,7 +149,7 @@ for(i in unique(data.hznu.area.predict.use$modiSeason)){
                           "d1h0","d1h1","d1h2",
                           "d2h0","d2h1","d2h2",
                           "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""),
-                  "d0h1_modiTempStd","d0h1_setTempStd",
+                  "d0h1_modiTempStd",
                   "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
                   "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio")
       # if(k=="real"){fullAttr<-append(fullAttr,"h1_errSvmIter")}
@@ -217,7 +218,15 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # RMSE 0.03099019 / 19.42023
 # R-square 0.9522667 / 0.9721413
 
+#全房间温度相关后全属性下RF-ideal-完全归一化/反归一化
+# MAPE 0.06918023 / 0.06806173
+# RMSE 0.0310698 / 19.51142
+# R-square 0.9520212 / 0.9718791
 
+#新行为无设定温度相关后全属性下RF-ideal-完全归一化/反归一化
+# MAPE 0.06388993 / 0.06341669
+# RMSE 0.02979856 / 18.66425
+# R-square 0.9536115 / 0.9728341
 
 ####汇总随机森林得出的重要性####
 stat.hznu.area.predict.energyFactor<-data.table(type="ideal/real",modiSeason="",round=-999,varName="",IncMSE=-999,IncPur=-999)[-1]
@@ -241,7 +250,7 @@ stat.hznu.area.predict.energyFactor.eva<-stat.hznu.area.predict.energyFactor.eva
                                             .[,.(rlatIncMSE=sum(IncMSE),rlatIncPur=sum(IncPur)),by=labelSeasonType]%>% #汇总统计各季节指标总和
                                             merge(y=.,x=stat.hznu.area.predict.energyFactor.eva,by="labelSeasonType",all.x=TRUE)%>% #合并总和指标
                                             mutate(.,rlatIncMSE=IncMSE/rlatIncMSE,rlatIncPur=IncPur/rlatIncPur)%>%as.data.table(.) #将总和指标转变为占比
-write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量_加温度相关_归一化后_v2.xlsx")
+write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF全变量_新行为无设定温度_归一化后.xlsx")
 
 
 # fit<-train(form=as.formula( paste("modiElec ~ ",paste(fullAttr,collapse = "+") ) ),
@@ -259,13 +268,13 @@ predictElecAttr<-list(constant=c("stdOutTemp","stdWeekday","isBizday","hour",
                       Summer_warm=c("d7h0_modiElecStd","d1_ltMeRatio","d1_ltMeRatio"),
                       Summer=c("stdWindSpeed","d1_ltMeRatio"))
 #严格版
-predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2"),"_modiElecStd",sep="")),#"stdWeekday","isBizday",
-                      Winter=c("d0h1_modiTempStd","d1h0_modiElecStd"),
+predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2","d1h0"),"_modiElecStd",sep="")),#"stdWeekday","isBizday",
+                      Winter=c("stdOutTemp","d0h1_modiTempStd"),
                       # Winter_warm=c("stdOutTemp","d2h0_modiElecStd","d7h0_modiElecStd","d1h0_modiElecStd"),#
-                      Winter_warm=c("stdOutTemp","d2h0_modiElecStd","d7h0_modiElecStd","d1h0_modiElecStd","d0h1_modiTempStd"),#
-                      Transition=c("stdOutTemp","d0h1_modiTempStd"),
-                      Summer_warm=c("stdOutTemp","d1h0_modiElecStd","d7h0_modiElecStd","d0h1_modiTempStd"),
-                      Summer=c("d1h0_modiElecStd","d1_ltMeRatio"))
+                      Winter_warm=c("stdOutTemp","d2h0_modiElecStd","d7h0_modiElecStd","d0h1_modiTempStd"),
+                      Transition=c("stdOutTemp"),
+                      Summer_warm=c("stdOutTemp","d7h0_modiElecStd"),
+                      Summer=c("d1_ltMeRatio"))#"d0h1_modiTempStd","d2h0_modiElecStd",
 
 ####SVM初始预测####
 #取RF预测的基本误差
@@ -376,6 +385,16 @@ getRSquare(pred = data.hznu.area.predict.use$svmInitIdeaElecDeNorm,ref = data.hz
 # RMSE 0.02894294 / 18.12342
 # R-square 0.9587268 / 0.9760055
 
+#全房间温度相关后严格属性下SVMinit-ideal-完全归一化/反归一化
+# MAPE 0.06374723 / 0.06328369
+# RMSE 0.02916696 / 18.38063
+# R-square 0.9580854 / 0.9753196
+
+#fianl-新行为无设定温度相关后严格属性下SVMinit-ideal-完全归一化/反归一化
+# MAPE 0.05853448 / 0.0589867
+# RMSE 0.02796577 / 17.61689
+# R-square 0.9591881 / 0.975801
+
 
 ####能耗预测SVM增强####
 #增加SVM初始预测误差作为输入
@@ -415,16 +434,17 @@ data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvmInitReal<-apply(data.hznu
                                                                       })
 
 ###仔细看看winter_warm的情况####
-data.hznu.area.predict.log<-data.hznu.area.predict.log[!(modiSeason=="Winter_warm"&method%in% c("svmIterPred_real"))]
-
-ggplot(data = data.hznu.area.predict.use[date%in% paperTime$Winter_warm],
-       aes(x=datetime,group=date))+geom_line(aes(y=modiElec))+geom_point(aes(y=modiElec))+
-  geom_line(aes(y=svmIterRealElecDeNorm,color="red"))+geom_point(aes(y=svmIterRealElecDeNorm,color="red"))+
-  geom_line(aes(y=rfRealElecDeNorm,color="green"))
-
-
-data.hznu.area.predict.log<-data.hznu.area.predict.log[!method%in% c("svmIterPred_real","svmIterPred_ideal")]
-data.hznu.area.predict.use[,c("svmIterRealElec","svmIterIdeaElec")]<-NULL
+# data.hznu.area.predict.log<-data.hznu.area.predict.log[!(modiSeason=="Winter_warm"&method%in% c("svmIterPred_real"))]
+# 
+# ggplot(data = data.hznu.area.predict.use[date%in% paperTime$Winter_warm],
+#        aes(x=datetime,group=date))+geom_line(aes(y=modiElec))+geom_point(aes(y=modiElec))+
+#   geom_line(aes(y=svmIterRealElecDeNorm,color="red"))+geom_point(aes(y=svmIterRealElecDeNorm,color="red"))+
+#   geom_line(aes(y=rfRealElecDeNorm,color="green"))
+# 
+# 
+# data.hznu.area.predict.log<-data.hznu.area.predict.log[!method%in% c("svmIterPred_real","svmIterPred_ideal")]
+# data.hznu.area.predict.use[,c("svmIterRealElec","svmIterIdeaElec")]<-NULL
+# #
 
 data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,svmIterIdeaElec=-999,svmIterRealElec=-999)%>%as.data.table(.)
 
@@ -502,6 +522,16 @@ getRSquare(pred = data.hznu.area.predict.use$svmIterIdeaElecDeNorm,ref = data.hz
 # MAPE 0.05995678 / 0.05961041
 # RMSE 0.02679923 / 16.58518
 # R-square 0.964887 / 0.9801159
+
+# SVMiter-ideal-全房间温度相关后严格属性下-完全归一化/反归一化
+# MAPE 0.06013354 / 0.05976345
+# RMSE 0.02704232 / 16.92143
+# R-square 0.9642471 / 0.9793014
+
+# final-SVMiter-ideal-新行为无设定温度后严格属性下-完全归一化/反归一化
+# MAPE 0.05427626 / 0.05481015
+# RMSE 0.02530741 / 15.61717
+# R-square 0.9666262 / 0.9810004
 
 
 
