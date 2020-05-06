@@ -136,6 +136,10 @@ write.xlsx(data.plfm.hznu.energy.hourly[buildingCode=="330100D273",c("datetime",
 
 
 
+####规律分析-室温-使用概率####
+data.hznu.teaching.event[onHour%in% 8:22&runtime<18& !is.na(finalState)&onTemp<36]%>%
+  .[modiSeason %in%c("Summer_warm","Summer"),.(count=length(labelRoomDay)),by=round(onTemp)] %>%
+  write.xlsx(.,file="PLFM_教学_室温-使用概率.xlsx")
 
 
 
