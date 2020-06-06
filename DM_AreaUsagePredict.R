@@ -289,18 +289,19 @@ backup.hznu.area.predict.use<-data.hznu.area.predict.use#2020.02.14 ±¸·ÝÁË8µãÓÃ²
 
 ####´óÂÛÎÄÓÃÊ±¼äÐòÁÐÐ§¹ûÆÀ¹À####
 for(i in names(paperTime)){
-  data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
+  data.hznu.area.predict.use[substr(date,1,7)=="2017-09"] %>% {#[date %in% paperTime[[i]]]
       cat("\n",i,
-          "\t",RMSE(pred = .$svmIterPred,obs = .$fullOnRatio,na.rm = TRUE),
-          "\t",getRSquare(pred = .$svmIterPred,ref = .$fullOnRatio),
-          "\t",getMAPE(yPred = .[fullOnRatio!=0]$svmIterPred, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+          "\t",RMSE(pred = .$simpleKnnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE),
+          "\t",getRSquare(pred = .$simpleKnnFullOnRatio,ref = .$fullOnRatio),
+          "\t",getMAPE(yPred = .[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
   }
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio,svmInitPred,svmIterPred
 
 ####»æÍ¼Êä³ö####
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Winter,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","svmIterPred")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[substr(date,1,7)=="2017-09",#date %in% paperTime$Winter#¸Ä³ÉÁË×¨ÀûÓÃ
+                                       c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))

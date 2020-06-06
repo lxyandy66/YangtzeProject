@@ -143,15 +143,16 @@ data.hznu.area.predict.use$rfRealElec<- -999
 for(i in unique(data.hznu.area.predict.use$modiSeason)){
   for (j in 0:9) {
     for(k in c("real","ideal")){
-      fullAttr<-c("stdOutTemp","stdWeekday","isBizday","hour",ifelse(k=="real","svmIterPred","fullOnRatio"),
+      fullAttr<-c("stdOutTemp","stdWeekday","isBizday","hour",#ifelse(k=="real","svmIterPred","fullOnRatio"),
                   "stdRhOut","stdWindSpeed",
                   paste(c("d0h1","d0h2",
                           "d1h0","d1h1","d1h2",
                           "d2h0","d2h1","d2h2",
-                          "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""),
-                  "d0h1_modiTempStd",
-                  "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
-                  "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio")
+                          "d7h0","d7h1","d7h2"),"_modiElecStd",sep = "")#,
+                  # "d0h1_modiTempStd",
+                  # "d1_lowEnergyRatio","d1_midEnergyRatio","d1_ltMeRatio","d1_ltHeRatio",
+                  # "d7_lowEnergyRatio","d7_midEnergyRatio","d7_ltMeRatio","d7_ltHeRatio"
+                  )
       # if(k=="real"){fullAttr<-append(fullAttr,"h1_errSvmIter")}
       fit<-randomForest(as.formula( paste("stdModiElec ~ ",paste(fullAttr,collapse = "+") ) ),
                         data=data.hznu.area.predict.use[id%%10!=j&modiSeason==i][complete.cases(data.hznu.area.predict.use[id%%10!=j&modiSeason==i,..fullAttr])],
@@ -228,6 +229,11 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # RMSE 0.02979856 / 18.66425
 # R-square 0.9536115 / 0.9728341
 
+#对比用 无行为/ 无设定温度相关后全属性下RF-ideal-完全归一化/反归一化
+# MAPE 0.1012174 / 0.09855406
+# RMSE 0.04738496 / 28.92545
+# R-square 0.8826993 / 0.9347526
+
 ####汇总随机森林得出的重要性####
 stat.hznu.area.predict.energyFactor<-data.table(type="ideal/real",modiSeason="",round=-999,varName="",IncMSE=-999,IncPur=-999)[-1]
 for(season in names(list.hznu.area.energyForest)){
@@ -275,6 +281,51 @@ predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2","d1h0"),"_modiElec
                       Transition=c("stdOutTemp"),
                       Summer_warm=c("stdOutTemp","d7h0_modiElecStd"),
                       Summer=c("d1_ltMeRatio"))#"d0h1_modiTempStd","d2h0_modiElecStd",
+
+
+
+####专利用SVM预测####
+seasonalAttr<-c("simpleKnnFullOnRatio","hour","stdOutTemp",paste(c("d0h1","d0h2","d1h0"),"_modiElecStd",sep=""))
+data.hznu.area.predict.pt<-data.hznu.area.predict.use[substr(date,1,7)=="2017-09",c("id","datetime","date","modiSeason","fullOnRatio","modiElec","stdModiElec",..seasonalAttr)]
+data.hznu.area.predict.pt[,c("ptSvmElec","ptSvmElecDeNorm")]<- -999
+data.hznu.area.predict.pt<-data.hznu.area.predict.pt%>%.[complete.cases(.[,..seasonalAttr])]%>%{
+  for(season in unique(.$modiSeason)){
+    for(round in 0:9){
+      cat("\n",season,round,"\n")
+      .[modiSeason==season]<-.[modiSeason==season]%>%{
+        fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
+                      data=.[id%%10!=round],
+                      kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#为啥这么慢
+        .[id%%10==round]$ptSvmElec<-predict(fit.svm,.[id%%10==round])
+        .#切记每一个%>%传到下一个的都是最后一句话的返回值，如果没有则返回空
+      }
+    }
+  }
+  .#切记这里需要返回一个原数据
+}%>%{
+  .[ptSvmElec== -999]$ptSvmElec<-NA
+  .$ptSvmElecDeNorm<-denormalize(targetNorm = .$ptSvmElec,refReal = .$modiElec,refNorm = .$stdModiElec)
+  .[ptSvmElecDeNorm==-999]$ptSvmElecDeNorm<-NA
+  .
+}
+
+#专利用结果检测
+data.hznu.area.predict.pt %>% {
+  cat(RMSE(pred = pull(.,"ptSvmElecDeNorm"),obs = .$modiElec,na.rm = TRUE),"\t",
+      getRSquare(pred = pull(.,"ptSvmElecDeNorm"),ref = .$modiElec),"\t",
+      getMAPE(yPred = pull(.,"ptSvmElecDeNorm"), yLook = .[modiElec!=0]$modiElec))#0.8631175
+}
+  
+ggplot(data=data.hznu.area.predict.pt[,c("datetime","modiElec","ptSvmElecDeNorm")] %>% melt(.,id.var=c("datetime")),#,"stdModiElec","ptSvmElecDeNorm"
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date(datetime),variable)))+geom_line()+geom_point(size=2)+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+#9月 Denorm 32.79336 	 0.9220783 	 0.1227471  449
+#9月 std    0.06006215 	 0.8582036 	 0.1227471 449
+#9月 直接    44.24175 	 0.8581754 	 0.5035281 449
+  
+  
+  
+  
 
 ####SVM初始预测####
 #取RF预测的基本误差
@@ -576,9 +627,9 @@ for(i in names(paperTime)){
       # cat("\nMean\t",mean(.$modiElec,na.rm = TRUE))#0.8631175
       # 
       cat("\n",i,"\t",j,"\t",
-          RMSE(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
-          getRSquare(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),ref = .$modiElec),"\t",
-          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
+          RMSE(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),ref = .$modiElec),"\t",
+          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
     }
   }
 }
