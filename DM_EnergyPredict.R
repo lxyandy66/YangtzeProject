@@ -14,6 +14,17 @@ load("2018-6-6.RData")#HZNU用电数据
 #实际能耗=f(时间序列能耗，室外温度，etc)
 #data.regress.raw<-nn
 
+
+####处理data.regress.total####
+#包括Nan、气象等
+data.regress.total<-data.regress.total%>%
+                    mutate_all(funs(ifelse(is.nan(.),NA, .))) %>% 
+                    mutate(.,datetime=as.POSIXct(paste(time,":00:00",sep="")))%>%data.table(.)
+data.regress.total<-merge(x=data.regress.total,
+                          y=data.weather.airport.final[!duplicated(data.weather.airport.final$datetime),c("datetime","outTemp","rhOut")],
+                          all.x = TRUE,by.x = "datetime",by.y = "datetime")
+colnames(data.regress.total)[14:15]<-c("w_temp","w_hum")
+
 data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
 
 #统计该季节时间段情况下有完整时间序列建筑的个数
@@ -26,12 +37,14 @@ data.regress.summary<-data.regress.summary[count==1464]
 # 好样本：330100D268(90+/29/25)
 
 buildingSelect<-"330100D268"
-data.regress.raw<-data.regress.total[month(time)%in% c(5,6)&year(time)==2017]
+data.regress.raw<-data.regress.total[year(time)==2017]
 data.regress.raw<-data.regress.raw[buildingCode==buildingSelect]
 
+#时间处理，平台导入需要
+data.regress.raw$modiTime<-format(data.regress.raw$datetime,"%m-%d %T")
 
 ####时间序列构建####
-timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,5,1,0),frequency = 24)
+timeSeries<-ts(data.regress.raw$total_elec,start = c(2017,1,1,0),frequency = 24)
 fit<-ets(timeSeries,model = "AAA")
 
 ####预测冷负荷值生成####
@@ -186,12 +199,61 @@ spreadLevelPlot(regressFit,id = TRUE)##有异常
 summary(gvlma(regressFit))
 
 
+####2020.5.2 十折SVM####
+data.regress.raw<-cbind(id=1:nrow(data.regress.raw),data.regress.raw)
+data.regress.raw$svmMulti<- -999
+#attr<-c("real_temp","w_hum","w_temp","temp_diff","set_temp")
+attr<-c("real_temp","w_hum","w_temp","temp_diff","set_temp",
+        "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean")
+
+data.regress.raw<-data.regress.raw%>%.[complete.cases(.[on=attr])] %>%{
+  for(i in 0:9){
+    fit.svm<-ksvm(x=as.formula( paste("total_elec ~ ",paste(attr,collapse = "+") ) ),
+                  data=.[id%%10 != i],#type="eps-svr",epsilon=0.001,C=15,cross=10,
+                  kernel="polydot")
+    .[id%%10 == i]$svmMulti<-predict(fit.svm,.[id%%10 == i])
+  }
+  .
+}
+
+nn1<-data.regress.raw%>%.[complete.cases(.[on=attr])] %>%{
+  for(i in 0){
+    fit.svm<-ksvm(x=as.matrix(.[id%%10 != i,..attr]),
+                  y=as.matrix(.[id%%10 != i,"total_elec"]),
+                  kernel="polydot",type="eps-svr")
+    .[id%%10 == i]$svmMulti <- predict(fit.svm,as.matrix(.[id%%10 == i,..attr]))
+  }
+  .
+}
+
+
+#真的MMP直接xy的差了太远了，用公式的速度太慢了
+data.regress.raw<-data.regress.raw%>%.[complete.cases(.[on=attr])] %>%{
+  for(i in 0:9){
+    fit.svm<-ksvm(x=as.matrix(.[id%%10 != i,..attr]),
+                  y=as.matrix(.[id%%10 != i,"total_elec"]),
+                  kernel="polydot",type="eps-svr")
+
+    .[id%%10 == i]$svmTemp <- predict(fit.svm,as.matrix(.[id%%10 == i,..attr]))
+  }
+  . #机智，主要最后一个返回一个.即可
+}
+data.regress.raw[svmTemp==-999]$svmTemp<- -1
+data.regress.raw[svmMulti==-999]$svmMulti<- -1
+melt(data.regress.raw[,c("modiTime","buildingCode","svmTemp","svmMulti")],id.vars = c("modiTime","buildingCode"))%>% {
+  .[variable=="svmTemp"]$variable<-"predTemp"
+  .[variable=="svmTemp"]$variable<-"predTemp"
+  .[variable=="svmMulti"]$variable<-"predSynthesis"
+  .
+  }%>%write.xlsx(.,file = "PLFM_D268_SVM.xls")
+
+
 ####SVM回归####
 x.training<-as.matrix(data.regress.training[,c("on_ratio","real_temp","w_hum","w_temp","hour",
-                                               "deltaInOutTemp","temp_diff","set_temp",
-                                               "estCoolingLoad",
-                                               "ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
-                                               "c1Ratio","c2Ratio","c3Ratio","c4Ratio"
+                                               "deltaInOutTemp","temp_diff","set_temp"
+                                               #"estCoolingLoad",
+                                               #"ecDayBefore","ecWeekBefore","ecHourBefore","time_sep","deltaECMean",
+                                               #"c1Ratio","c2Ratio","c3Ratio","c4Ratio"
                                                )])
 y.training<-as.matrix(data.regress.training[,"total_elec"])
 x.test<-as.matrix(data.regress.test[,c("on_ratio","real_temp","w_hum","w_temp","hour",

@@ -152,6 +152,9 @@ getRSquare(pred = data.hznu.area.predict.use$simpleKnnFullOnRatio,ref = data.hzn
 
 
 ####SVM进行预测####
+# 上图中的模型参数有两个，cost（惩罚/犯错成本），gamma（到达范围）
+# gamma越大，训练样本到达越广，较小则反之，惩罚代表犯错的成本
+# cost越大，犯错成本就越高，容易造成过度拟合问题，设置太小，可能会欠拟合。
 
 #增加辅助变量
 #与KNN预测误差
