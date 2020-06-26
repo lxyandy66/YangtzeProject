@@ -252,13 +252,17 @@ data.hznu.area.signCheck[modiSeason %in% c("Spring","Autumn")]$modiSeason<-"Tran
 hstTimeInvl<-c("d0h1","d0h2","d1h0","d1h1","d1h2","d2h0","d2h1","d2h2","d7h0","d7h1","d7h2")#"r1h0",
 patternRatioName<-c("onDemandRatio","forenoonRatio","afternoonRatio","daytimeRatio","lateDaytimeRatio","allDayRatio")
 energyPatternRatioName<-c("lowEnergyRatio","midEnergyRatio","ltMeRatio","ltHeRatio")
-signAttr<-list(weatherAttr=c("stdOutTemp","stdRhOut","stdWindSpeed","stdWeekday","isBizday","d0h1_modiTempStd","stdHour"),#
+signAttr<-list(weatherAttr=c("outTemp","rhOut","windSpeed","weekday","isBizday","hour","d0h1_modiTemp"),#"stdOutTemp","stdRhOut","stdWindSpeed",
                fullOnRatio=c(paste(hstTimeInvl,"FullOnRatio",sep = "_")),
                # dayOnRatio=c(paste(hstTimeInvl,"DayOnRatio",sep = "_")),
                stdModiElec=c(paste(hstTimeInvl,"modiElec",sep="_")),
                patternRatio=c(paste(c(rep("d1_",6),rep("d7_",6)),patternRatioName,sep = "")),#rep("r1_",6),
                energyPatternRatio=c(paste(c(rep("d1_",4),rep("d7_",4)),energyPatternRatioName,sep = ""))#rep("r1_",4),
                )#rep("r1_",6),
+
+#需扣掉盛夏和严冬多余的两个季节中多余的模式
+excessUsagePattern<-c("d1_forenoonRatio","d7_forenoonRatio","d1_afternoonRatio","d7_afternoonRatio",
+                      "d1_lateDaytimeRatio","d7_lateDaytimeRatio")
 
 
 data.hznu.area.signCheck[,c(paste(signAttr$patternRatio,"_org",sep = ""))]<-NULL
@@ -392,7 +396,7 @@ for(i in unique(data.hznu.area.signCheck.pickup$modiSeason)){
 
 ####按perason循环统计变量显著性####
 rm(stat.hznu.area.cor)
-for(i in c("fullOnRatio","stdModiElec")){#
+for(i in c("fullOnRatio")){#,"stdModiElec"
   for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
     for(k in c("weatherAttr","hst","patternRatio","energyPatternRatio","useHst")){
       #根据目前循环分组选取适合公式 #我觉得可以简化一下
@@ -411,6 +415,10 @@ for(i in c("fullOnRatio","stdModiElec")){#
       }
       #根据得到的显著性计算formula通过logistics计算显著性
       
+      if(j %in% c("Summer","Winter")&k=="patternRatio")
+        attr<-attr[!attr%in% excessUsagePattern]
+    
+      
       nn<-corr.test(y=data.hznu.area.signCheck.pickup[,..i],x=data.hznu.area.signCheck.pickup[,..attr],method = "spearman",use = "complete.obs")
       if(exists("stat.hznu.area.cor")){
         stat.hznu.area.cor<-rbind(stat.hznu.area.cor,data.table(target=i,modiSeason=j,attr=k,var=row.names(nn$r),r=as.numeric(nn$r),sign=nn$ci$p))
@@ -420,45 +428,39 @@ for(i in c("fullOnRatio","stdModiElec")){#
     }
   }
 }
-write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数_含所有房间.xlsx")
+write.xlsx(stat.hznu.area.cor,file = "HZNU_Area_变量相关性系数_含所有房间_小论文.xlsx")
 #真的线性相关太不行了
+
 
 
 ####按logistics循环统计变量显著性####
 rm(stat.hznu.area.predict.sign)
-for(i in c("fullOnRatio")){#,"stdModiElec"
-  for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){
-    for(k in c("weatherAttr","hst","patternRatio","useHst")){#"energyPatternRatio"
-      #根据目前循环分组选取适合公式 #我觉得可以简化一下
-      if(k=="useHst"){#useHst仅对能耗模式考虑，因此提前判断
-        if(i=="stdModiElec"){
-          fmla.area.sign<-as.formula(paste(i,"~",paste(c("fullOnRatio",signAttr[["fullOnRatio"]]),collapse = "+")))
-        }#计算能耗显著性时考虑历史空调使用率时仍包括此刻的空调使用率，在实际模型中该值来源于预测
-        else{
-          next#只针对能耗显著性才考虑行为的影响
-        }
-      }
-      else{
-        if(k=="hst"){
-          fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[i]],collapse = "+")))
-        }else{
-          fmla.area.sign<-as.formula(paste(i,"~",paste(signAttr[[k]],collapse = "+")))
-        }
-      }
-      #根据得到的显著性计算formula通过logistics计算显著性
-      fit<-glm(fmla.area.sign,
-               data=data.hznu.area.signCheck.pickup[modiSeason==j],family = binomial(),na.action = na.omit)
+for(i in c("fullOnRatio")){#i表示显著性分析的因变量 #,"stdModiElec"
+  for(j in unique(data.hznu.area.signCheck.pickup$modiSeason)){#j为季节分组
+    for(k in c("weatherAttr","fullOnRatio","patternRatio")){#对应三组变量：天气，行为历史，行为模式历史#"energyPatternRatio"
+      
+      #对于部分季节剔除非典型的行为模式
+      if(j %in% c("Summer","Winter"))
+        seasonalAttr<-signAttr[[k]][!signAttr[[k]] %in% excessUsagePattern]
+      else
+        seasonalAttr<-signAttr[[k]]
+      
+      fit<-lm(as.formula(paste(i,"~",paste(seasonalAttr,collapse = "+"))),
+            data=data.hznu.area.signCheck.pickup%>%.[modiSeason==j&complete.cases(.[,..seasonalAttr])],#family = binomial(),
+            na.action = na.omit)
+      cat(j,"\t",length(fit$residuals),"\n")
       stat.fit<-summary(fit)
       
       if(exists("stat.hznu.area.predict.sign")){
-        stat.hznu.area.predict.sign<-rbind(stat.hznu.area.predict.sign,data.table(target=i,modiSeason=j,attr=k,var=row.names(stat.fit$coefficients),stat.fit$coefficients))
+        stat.hznu.area.predict.sign<-rbind(stat.hznu.area.predict.sign,
+                                           data.table(target=i,modiSeason=j,attr=k,var=row.names(stat.fit$coefficients),stat.fit$coefficients))
       }else{
         stat.hznu.area.predict.sign<-data.table(target=i,modiSeason=j,attr=k,var=row.names(stat.fit$coefficients),stat.fit$coefficients)
       }
     }
   }
 }
-write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final_含所有房间_logit_STD.xlsx")
+write.xlsx(stat.hznu.area.predict.sign,file = "HZNU_AreaSelected_Use_withTemp_AttrSign_final_含所有房间_linear_小论文.xlsx")
 
 
 

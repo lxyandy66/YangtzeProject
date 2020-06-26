@@ -29,10 +29,20 @@ data.hznu.teaching.decoupling$areaScale<-apply(data.hznu.teaching.decoupling[,"a
 ####统一能耗模式参数命名####
 此处注意无需重复执行
 unique(data.hznu.teaching.decoupling$energyClusterName)
-data.hznu.teaching.decoupling[energyClusterName=="ShortTime_LowEnergy"]$energyClusterName<-"LowEnergy"
-data.hznu.teaching.decoupling[energyClusterName=="MidEnergy"]$energyClusterName<-"MidEnergy_MidTime"
-data.hznu.teaching.decoupling[energyClusterName=="LongTime_MidEnergy"]$energyClusterName<-"MidEnergy_LongTime"
-data.hznu.teaching.decoupling[energyClusterName=="LongTime_HighEnergy"]$energyClusterName<-"HighEnergy"
+data.hznu.teaching.decoupling$energyClusterName<-apply(X = data.hznu.teaching.decoupling[,"energyClusterName"],MARGIN = 1,
+                                                       FUN = function(x){  
+                                                         if (x=="ShortTime_LowEnergy") {
+                                                           return("LowEnergy")
+                                                         }else if(x=="MidEnergy"){
+                                                           return("MidEnergy_MidTime")
+                                                         }else if(x=="LongTime_MidEnergy"){
+                                                           return("MidEnergy_LongTime")
+                                                         }else if ("LongTime_HighEnergy") {
+                                                           return("HighEnergy")
+                                                         }else
+                                                           return(x)
+                                                      })
+
 
 
 #用于统一树类的剪枝情况
@@ -40,6 +50,13 @@ localInitCP<-0.01
 list.hznu.decoupling.cart<-list()
 
 j<-unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)[6]
+
+
+####定义能耗解耦关系式####
+decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTemp","meanOutTemp","meanRhOut","runtime","acIntensity")
+decouplingFormula<-as.formula(paste("energyClusterName ~ ",paste(decouplingAttr,collapse = "+")))
+
+
 ####训练集/测试集划分####
 #分块处理
 for(i in unique(data.hznu.teaching.decoupling$finalState) ){
@@ -47,30 +64,25 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
   stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))[-1]
   for(j in unique(data.hznu.teaching.decoupling[finalState==i]$clusterName)){
   
-    data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState==i&clusterName==j]
     #变量的预处理
-    data.hznu.teaching.decoupling.selected$energyClusterName<-as.factor(data.hznu.teaching.decoupling.selected$energyClusterName)
-    data.hznu.teaching.decoupling.selected$thermoPattern<-as.factor(data.hznu.teaching.decoupling.selected$thermoPattern)
-    data.hznu.teaching.decoupling.selected$clusterName<-as.factor(data.hznu.teaching.decoupling.selected$clusterName)
-    data.hznu.teaching.decoupling.selected$areaScale<-as.factor(data.hznu.teaching.decoupling.selected$areaScale)
-    data.hznu.teaching.decoupling.selected$modiSeason<-as.factor(data.hznu.teaching.decoupling.selected$modiSeason)
+    data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling[finalState==i&clusterName==j] %>% .[complete.cases(.[,..decouplingAttr])] %>%{
+      .[,c("energyClusterName","thermoPattern","clusterName","areaScale","modiSeason")]<-
+        lapply(.[,c("energyClusterName","thermoPattern","clusterName","areaScale","modiSeason")], as.factor)
+      .
+    }
     data.hznu.teaching.decoupling.selected$runtimeClass<-as.factor(apply(X=data.hznu.teaching.decoupling.selected[,c("runtime")],
                                                                MARGIN = 1,FUN = getRuntimeClass))
     data.hznu.teaching.decoupling.selected$setTempClass<-as.factor(
       apply(data.hznu.teaching.decoupling.selected[,c("setTemp")],MARGIN = 1,FUN = getSetTempClass,state=i))
-    # data.hznu.teaching.decoupling.selected$runtime<-as.factor(data.hznu.teaching.decoupling.selected$runtime)
     
     
     ####训练集/测试集划分####
     set.seed(711)
-    data.hznu.teaching.decoupling.selected<-data.hznu.teaching.decoupling.selected[complete.cases(data.hznu.teaching.decoupling.selected[,..decouplingAttr])]
-    sub<-sample(1:nrow(data.hznu.teaching.decoupling.selected),round(nrow(data.hznu.teaching.decoupling.selected))*8/10)
+    sub<-data.hznu.teaching.decoupling.selected%>%sample(1:nrow(.),round(nrow(.))*8/10)
     data.hznu.teaching.decoupling.training<-data.hznu.teaching.decoupling.selected[sub]
     data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
     
-    ####定义能耗解耦关系式####
-    decouplingAttr<-c("thermoPattern","areaScale","modiSeason","setTemp","meanOutTemp","meanRhOut","runtime","acIntensity")
-    decouplingFormula<-as.formula(paste("energyClusterName ~ ",paste(decouplingAttr,collapse = "+")))
+
     
     if(length(unique(data.hznu.teaching.decoupling.selected$modiSeason))>1){
       tenFoldFormula<-decouplingFormula
@@ -111,9 +123,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       
       list.hznu.decoupling.cart[[i]][[j]][["holdOut"]]<-tree.both
       #测试集验证
-      cmResult<-
-        predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
-                            predictableModel = rpartTrue2)
+      cmResult<-data.hznu.teaching.decoupling.test%>%
+                predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
         # predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
         #             predictableModel = rpartTrue2)
       #结果输出
@@ -125,12 +136,12 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-                                    predictableModel = rpartTrue2)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
-      rm(tree.both,rpartTrue2,cmResult,cmResultTraining)
+      rm(tree.both,rpartTrue2,cmResult,cmResultTraining)#临时变量清除
     }
     
     #ID3决策树算法
@@ -154,8 +165,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-                                    predictableModel = rpartTrue2)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
@@ -178,8 +189,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       # 应该是包的问题
       
       #测试集验证
-      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
-                            predictableModel = tree.both)
+      cmResult<-data.hznu.teaching.decoupling.test%>%
+                predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = tree.both)
       
       #结果输出
       rpartTrue2<-as.party(tree.both)
@@ -191,8 +202,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-                                    predictableModel = tree.both)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = tree.both)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
@@ -218,8 +229,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-                                    predictableModel = tree.both)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = tree.both)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
@@ -250,8 +261,7 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
                                ntree=1000,cp=localInitCP,
                                na.action = na.omit,importance=TRUE)
       #测试集验证
-      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test,resultValue = data.hznu.teaching.decoupling.test$energyClusterName,
-                            predictableModel = fit.forest)
+      cmResult<-data.hznu.teaching.decoupling.test%>%predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
       #结果输出
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo, fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
@@ -261,8 +271,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-                                    predictableModel = fit.forest)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
@@ -333,9 +343,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       
       regm<-ksvm(svmFormula,data=data.hznu.teaching.decoupling.training,
                  kernel="rbfdot",type="C-svc",C=10,cross=10)
-      cmResult<-predictTest(testSet = data.hznu.teaching.decoupling.test[complete.cases(data.hznu.teaching.decoupling.test[,..decouplingAttr])],
-                            resultValue = data.hznu.teaching.decoupling.test[complete.cases(data.hznu.teaching.decoupling.test[,..decouplingAttr])]$energyClusterName,
-                            predictableModel = regm )
+      cmResult<-data.hznu.teaching.decoupling.test%>%.[complete.cases(.[,..decouplingAttr])]%>%
+                predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = regm )
       #结果输出
       outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
                       algoName = algo, fmla = svmFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"))
@@ -343,9 +352,8 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
       #训练集结果写入内存
-      cmResultTraining<-predictTest(testSet = data.hznu.teaching.decoupling.training[complete.cases(data.hznu.teaching.decoupling.training[,..decouplingAttr])],
-                                    resultValue = data.hznu.teaching.decoupling.training[complete.cases(data.hznu.teaching.decoupling.training[,..decouplingAttr])]$energyClusterName,
-                                    predictableModel = regm)
+      cmResultTraining<-data.hznu.teaching.decoupling.training%>%.[complete.cases(.[,..decouplingAttr])]%>%
+                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = regm)
       stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
                                           data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
                                                      acc=cmResultTraining$overall["Accuracy"],setType="training"))
