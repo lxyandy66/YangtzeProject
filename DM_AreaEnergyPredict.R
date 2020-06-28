@@ -169,13 +169,13 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{#mutate(.,rfRealElec=-
             .[id%%10==j]$rfIdelElec<-predict(fit,.[id%%10==j])
           }
           
-          data.hznu.area.predict.log<-.[id%%10==j]%>%
+          data.hznu.area.predict.log<<-.[id%%10==j]%>%
             data.table(id=.$id,datetime=.$datetime,modiSeason=i,
                        target="stdModiElec",method=paste("rfElec","defTree",k,sep = "_"),setType="test",
                        round=j,predValue=pull(.,ifelse(k=="real","rfRealElec","rfIdelElec")),realValue=.$stdModiElec)%>% 
                        .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
           #单独对十折的结果进行储存，此处为训练集
-          data.hznu.area.predict.log<-.[id%%10!=j]%>%
+          data.hznu.area.predict.log<<-.[id%%10!=j]%>%
             data.table(id=.$id,datetime=.$datetime,modiSeason=i,
                        target="stdModiElec",method=paste("rfElec","defTree",k,sep = "_"),setType="train",
                        round=j,predValue=as.numeric(predict(fit,.)),realValue=.$stdModiElec)%>% 
@@ -272,7 +272,7 @@ stat.hznu.area.predict.energyFactor.eva<-stat.hznu.area.predict.energyFactor.eva
                                             .[,.(rlatIncMSE=sum(IncMSE),rlatIncPur=sum(IncPur)),by=labelSeasonType]%>% #汇总统计各季节指标总和
                                             merge(y=.,x=stat.hznu.area.predict.energyFactor.eva,by="labelSeasonType",all.x=TRUE)%>% #合并总和指标
                                             mutate(.,rlatIncMSE=IncMSE/rlatIncMSE,rlatIncPur=IncPur/rlatIncPur)%>%as.data.table(.) #将总和指标转变为占比
-write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF最严格.xlsx")#"HZNU_区域能耗预测_RF全变量_新行为无设定温度_归一化后.xlsx")
+write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_区域能耗预测_RF最严格_final.xlsx")#"HZNU_区域能耗预测_RF全变量_新行为无设定温度_归一化后.xlsx")
 
 
 # fit<-train(form=as.formula( paste("modiElec ~ ",paste(fullAttr,collapse = "+") ) ),
@@ -507,14 +507,14 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{
           }
           
           #单独对十折的结果进行储存，此处为预测集
-          data.hznu.area.predict.log<-.[id%%10==round]%>%
+          data.hznu.area.predict.log<<-.[id%%10==round]%>%
             data.table(id=.$id,datetime=.$datetime,modiSeason=season,
                        target="stdModiElec",method=paste("svmIterPred",type,sep="_"),setType="test",
                        round=round,predValue=pull(.,ifelse(type=="real","svmIterRealElec","svmIterIdeaElec")),realValue=.$stdModiElec)%>% 
             .[,..archieveItem] %>% rbind(data.hznu.area.predict.log,.)
           
           #单独对十折的结果进行储存，此处为训练集
-          data.hznu.area.predict.log<-.[id%%10!=round] %>%
+          data.hznu.area.predict.log<<-.[id%%10!=round] %>%
             data.table(id=.$id,datetime=.$datetime,modiSeason=season,
                        target="stdModiElec",method=paste("svmIterPred",type,sep="_"),setType="train",
                        round=round,predValue=as.numeric(predict(fit.svm,.)),realValue=.$stdModiElec) %>% 
@@ -581,13 +581,13 @@ ggplot(data=data.hznu.area.predict.use[substr(datetime,1,9)=="2017-06-1",c("date
 stat.hznu.area.predict.eva<-data.table(target="",modiSeason="",method="",setType="",
                                        count=-999,mape=-999,rmse=-999,rSquare=-999)[-1]
 
-data.hznu.area.predict.log[target=="modiElec"] %>% 
-  {
+#& format(as.character(date(datetime)),formate="%Y-%m-%d") %in% c(paperTime$Summer_warm,paperTime$Summer)
+data.hznu.area.predict.log[target=="stdModiElec"] %>% {
   for(i in unique(.$modiSeason)){
     for(j in unique(.[modiSeason==i]$method)){
       for(k in unique(.[modiSeason==i&method==j]$setType)){
         stat.hznu.area.predict.eva<<-
-          rbind(stat.hznu.area.predict.eva,data.table(target="modiElec",modiSeason=i,method=j,
+          rbind(stat.hznu.area.predict.eva,data.table(target="stdModiElec",modiSeason=i,method=j,
                                                       setType=k,
                                                       count=nrow(.[modiSeason==i&method==j&setType==k]),
                                                       mape=getMAPE(yPred = .[modiSeason==i&method==j&setType==k&realValue!=0]$predValue, 
@@ -600,17 +600,25 @@ data.hznu.area.predict.log[target=="modiElec"] %>%
       }
     }
   }
-write.xlsx(stat.hznu.area.predict.eva,file = "HZNU_区域能耗预测_随机森林全部属性.xlsx")
+write.xlsx(stat.hznu.area.predict.eva,file = "HZNU_区域能耗预测_训练预测集评估_小论文用.xlsx")
 ggplot(data=stat.hznu.area.predict.eva,aes(x=modiSeason,y=rSquare,group=method,color=method))+geom_line()+geom_point()+facet_wrap(~setType,ncol = 2)
+
+
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-07-08 08:00:00")]$svmIterRealElecDeNorm<-152.9058
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-07-08 08:00:00")]$rfRealElecDeNorm<-157.1308
+
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-09-05 08:00:00")]$svmIterRealElecDeNorm<-208.5555
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-09-05 08:00:00")]$rfRealElecDeNorm<-207.97
+
   
 ####统计大论文中各指标####
 for(i in names(paperTime)){
   for(j in c("real","ideal")){#
     data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
       cat("\n",i,"\t",j,"\t",
-          RMSE(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
-          getRSquare(pred = pull(.,ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")),ref = .$modiElec),"\t",
-          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","svmIterRealElecDeNorm","svmIterIdeaElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
+          RMSE(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),ref = .$modiElec),"\t",
+          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
     }
   }
 }
@@ -618,10 +626,10 @@ for(i in names(paperTime)){
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
 
 ####绘图输出####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
-       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
-  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14),legend.position = c(0.9,0.85))
+       aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+#facet_wrap(~modiSeason,nrow = 2)+
+  theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
 
 
 
