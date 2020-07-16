@@ -336,14 +336,19 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
   theme_bw()
 
 #检查教室容量与EUI或绝对能耗分布关系
-ggplot(data=data.hznu.teaching.energy.std[!is.na(modiSeat)&modiSeat!=0] %>% mutate(.,modiSeat=as.factor(modiSeat)),
-       aes(x=modiSeat,y=areaEUI))+#ylim(0,2.5)+ color=energyClusterName
-  geom_boxplot(outlier.colour = NA,width=0.5)+facet_wrap(~finalState)+  
-  geom_line(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
-  geom_point(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
-  theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ylim(0,2.5)+
-  theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
-        legend.text = element_text(size=14))
+ggsave(filename = "制冷_教室座位数与能耗值.png",width = 5,height = 5,dpi=200,
+       plot=ggplot(data=data.hznu.teaching.energy.std[finalState=="cooling"&!is.na(modiSeat)&modiSeat!=0] %>% mutate(.,modiSeat=as.factor(modiSeat)),
+                   aes(x=modiSeat,y=sumElec))+#ylim(0,2.5)+ color=energyClusterName
+         geom_boxplot(outlier.colour = NA,width=0.38)+stat_summary(fun.y = "mean",geom = "point")+stat_summary(fun.y = "mean",geom = "line",group=1)+
+         # facet_wrap(~finalState)+
+         # geom_line(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+         # geom_point(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
+         theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ylim(0,150)+
+         theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
+               legend.text = element_text(size=14))
+       )
+
+
 
 
 #检查各能耗模式对应的教室EUI或能耗
@@ -378,10 +383,15 @@ ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afterno
        aes(fill=clusterName,x=as.factor(modiSeat)))+geom_bar()#真没啥区别
 
 #不同规模教室各季节空调使用时长
-ggplot(data=data.hznu.teaching.decoupling,aes(x=areaScale,y=runtime))+geom_boxplot(width=0.5)+
-  stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+scale_y_continuous(breaks=seq(0,18,2))+
-  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))+
-  facet_wrap(~modiSeason,nrow=1)#
+for(i in unique(data.hznu.teaching.decoupling$modiSeason)){
+  ggsave(
+    plot = ggplot(data=data.hznu.teaching.decoupling[modiSeason==i],aes(x=areaScale,y=runtime))+geom_boxplot(width=0.38)+
+      stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+scale_y_continuous(breaks=seq(0,18,2))+
+      # facet_wrap(~modiSeason,nrow=1)+
+      theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14)),
+    filename = paste(i,"_不同教室与空调使用时长.png"),width = 3,height = 4,dpi=200
+  )
+}
 
 #不同规模教室各季节空调使用模式分布
 ggplot(data=data.hznu.teaching.decoupling %>% mutate(.,clusterNameClass=ifelse(clusterName=="OnDemand","Short",

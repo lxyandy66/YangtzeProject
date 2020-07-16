@@ -544,3 +544,15 @@ flattenCorrMatrix <- function(cormat, pmat) {
   
 }
 
+####将列表合并成数据框####
+listToDataTable<-function(list){
+  dt<-list[[1]]
+  if(length(list)<2)
+    return(dt)
+  for(i in 2:length(list)){
+    dt<-rbind(dt,list[[i]])
+  }
+  return(dt)
+}
+
+
