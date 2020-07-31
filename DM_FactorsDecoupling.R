@@ -59,6 +59,11 @@ decouplingFormula<-as.formula(paste("energyClusterName ~ ",paste(decouplingAttr,
 
 ####训练集/测试集划分####
 #分块处理
+data.hznu.teaching.decoupling.log$type<-"train"
+data.hznu.teaching.decoupling.log$real<-as.character(data.hznu.teaching.decoupling.log$real)
+data.hznu.teaching.decoupling.log$pred<-as.character(data.hznu.teaching.decoupling.log$pred)
+data.hznu.teaching.decoupling.log<-data.table(labelRoomDay="",finalState="",type="train",
+                                              clusterName="",method="method",real="energyClusterName",pred="pred")[-1]
 for(i in unique(data.hznu.teaching.decoupling$finalState) ){
   #作为整体准确度计算和算法评估的汇总
   stat.hznu.decoupling.algoAcc<-data.table(algoName="",setType="",finalState="",usagePattern="",count=as.numeric(NA),acc=as.numeric(NA))[-1]
@@ -70,16 +75,16 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
         lapply(.[,c("energyClusterName","thermoPattern","clusterName","areaScale","modiSeason")], as.factor)
       .
     }
-    data.hznu.teaching.decoupling.selected$runtimeClass<-as.factor(apply(X=data.hznu.teaching.decoupling.selected[,c("runtime")],
-                                                               MARGIN = 1,FUN = getRuntimeClass))
-    data.hznu.teaching.decoupling.selected$setTempClass<-as.factor(
-      apply(data.hznu.teaching.decoupling.selected[,c("setTemp")],MARGIN = 1,FUN = getSetTempClass,state=i))
-    
+    # data.hznu.teaching.decoupling.selected$runtimeClass<-as.factor(apply(X=data.hznu.teaching.decoupling.selected[,c("runtime")],
+    #                                                            MARGIN = 1,FUN = getRuntimeClass))
+    # data.hznu.teaching.decoupling.selected$setTempClass<-as.factor(
+    #   apply(data.hznu.teaching.decoupling.selected[,c("setTemp")],MARGIN = 1,FUN = getSetTempClass,state=i))
+    # 
     
     ####训练集/测试集划分####
     set.seed(711)
-    sub<-data.hznu.teaching.decoupling.selected%>%sample(1:nrow(.),round(nrow(.))*8/10)
-    data.hznu.teaching.decoupling.training<-data.hznu.teaching.decoupling.selected[sub]
+    sub<-sample(1:nrow(data.hznu.teaching.decoupling.selected),round(nrow(data.hznu.teaching.decoupling.selected))*8/10)
+    data.hznu.teaching.decoupling.training<-data.hznu.teaching.decoupling.selected[sub,]
     data.hznu.teaching.decoupling.test<-data.hznu.teaching.decoupling.selected[-sub]
     
 
@@ -111,37 +116,53 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
       # rm(fit,cmResult)
       
       #hold-out验证法
-      tree.both<-rpart(decouplingFormula,cp=0.02,minbucket=20,#localInitCP,
-                     # maxsurrogate=100,maxcompete=10,
-                     data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
-      # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
-      rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party"
-      plot(rpartTrue2)
-      # par(mfrow=c(1,1))
-      prp(tree.both,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05)
+      # tree.both<-rpart(decouplingFormula,cp=0.02,minbucket=20,#localInitCP,
+      #                # maxsurrogate=100,maxcompete=10,
+      #                data=data.hznu.teaching.decoupling.training)#rpart,即经典决策树，必须都为factor或定性,连char都不行...
+      # # tree.both<-prune(tree.both, cp= tree.both$cptable[which.min(tree.both$cptable[,"xerror"]),"CP"])#tree.both$cptable步长随机，很难保证一致输出
+      # rpartTrue2<-as.party(tree.both)#class(rpartTrue2)------[1]"constparty" "party"
+      # plot(rpartTrue2)
+      # # par(mfrow=c(1,1))
+      # prp(tree.both,type=5,extra = 8,varlen=0,faclen=0,digits = 3,gap =0,tweak =1.05)
      
       
-      list.hznu.decoupling.cart[[i]][[j]][["holdOut"]]<-tree.both
+      # list.hznu.decoupling.cart[[i]][[j]][["holdOut"]]<-tree.both
+      
+      
+      #保存样本的预测值以及各分类的概率
+      data.hznu.teaching.decoupling.log<-rbind(data.hznu.teaching.decoupling.log,
+                                               data.table(labelRoomDay=data.hznu.teaching.decoupling.test$labelRoomDay,
+                                                          finalState=i,
+                                                          clusterName=j,
+                                                          method="CART",
+                                                          type="test",
+                                                          real=data.hznu.teaching.decoupling.test$energyClusterName,
+                                                          pred=predict(list.hznu.decoupling.cart[[i]][[j]][["holdOut"]],
+                                                                       data.hznu.teaching.decoupling.test,type="class"),
+                                                          predict(list.hznu.decoupling.cart[[i]][[j]][["holdOut"]],
+                                                                  data.hznu.teaching.decoupling.test,type="prob")),fill=TRUE)
+      
+      
       #测试集验证
-      cmResult<-data.hznu.teaching.decoupling.test%>%
-                predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
-        # predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
-        #             predictableModel = rpartTrue2)
-      #结果输出
-      outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
-      outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
-                      algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
-                      other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
-      #内存结果保留
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
-      #训练集结果写入内存
-      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
-                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
-                                                     acc=cmResultTraining$overall["Accuracy"],setType="training"))
-      rm(tree.both,rpartTrue2,cmResult,cmResultTraining)#临时变量清除
+      # cmResult<-data.hznu.teaching.decoupling.test%>%
+      #           predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
+      #   # predictTest(testSet = data.hznu.teaching.decoupling.training,resultValue = data.hznu.teaching.decoupling.training$energyClusterName,
+      #   #             predictableModel = rpartTrue2)
+      # #结果输出
+      # outputImg(rpartTrue2,hit=900,wid = 1600,fileName =paste(i,j,algo,"TreeMap.png",sep = "_"))
+      # outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
+      #                 algoName = algo,tree = tree.both , fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
+      #                 other = list(paste("Total node: ",length(rpartTrue2)),tree.both$variable.importance) )
+      # #内存结果保留
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
+      # #训练集结果写入内存
+      # cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+      #                   predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = rpartTrue2)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
+      #                                                acc=cmResultTraining$overall["Accuracy"],setType="training"))
+      # rm(tree.both,rpartTrue2,cmResult,cmResultTraining)#临时变量清除
     }
     
     #ID3决策树算法
@@ -244,89 +265,113 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
      
       algo<-"RandomForest"
       #10-fold验证
-      fit<-train(form=tenFoldFormula,na.action = "na.omit",
-                 data=data.hznu.teaching.decoupling.selected,method = "rf",tuneGrid=data.frame(mtry=2:5),importance=TRUE,ntree=1000,
-                 trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))#ntree能传进不知道能不能调
-      cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
-      outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
-                      algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
-                      other = list("nTree = 1000",importance(fit$finalModel,type = 1),importance(fit$finalModel,type = 2)))
-      rm(fit,cmResult)
+      # fit<-train(form=tenFoldFormula,na.action = "na.omit",
+      #            data=data.hznu.teaching.decoupling.selected,method = "rf",tuneGrid=data.frame(mtry=2:5),importance=TRUE,ntree=1000,
+      #            trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))#ntree能传进不知道能不能调
+      # cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
+      # outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
+      #                 algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
+      #                 other = list("nTree = 1000",importance(fit$finalModel,type = 1),importance(fit$finalModel,type = 2)))
+      # rm(fit,cmResult)
       
       
       #hold-out验证
       fit.forest<-randomForest(decouplingFormula,data=data.hznu.teaching.decoupling.training,
-                               ntree=1000,cp=localInitCP,
+                               ntree=1000,cp=localInitCP,mty=2,
                                na.action = na.omit,importance=TRUE)
-      #测试集验证
-      cmResult<-data.hznu.teaching.decoupling.test%>%predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
-      #结果输出
-      outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
-                      algoName = algo, fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
-                      other = list("nTree = 1000",importance(fit.forest,type = 1),importance(fit.forest,type = 2)))
-      outputImg(plottable = fit.forest,hit=480,wid=640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
-      #内存结果保留
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
-      #训练集结果写入内存
-      cmResultTraining<-data.hznu.teaching.decoupling.training%>%
-                        predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
-                                                     acc=cmResultTraining$overall["Accuracy"],setType="training"))
+      
+      data.hznu.teaching.decoupling.log<-rbind(data.hznu.teaching.decoupling.log,
+                                               data.table(labelRoomDay=data.hznu.teaching.decoupling.test$labelRoomDay,
+                                                          finalState=i,
+                                                          clusterName=j,
+                                                          method="randomForest",
+                                                          type="test",
+                                                          real=data.hznu.teaching.decoupling.test$energyClusterName,
+                                                          pred=predict(fit.forest,
+                                                                       data.hznu.teaching.decoupling.test,type="class"),
+                                                          predict(fit.forest,
+                                                                  data.hznu.teaching.decoupling.test,type="prob")),fill=TRUE)
+      # #测试集验证
+      # cmResult<-data.hznu.teaching.decoupling.test%>%predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
+      # #结果输出
+      # outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"Result.txt",sep = "_"),
+      #                 algoName = algo, fmla = decouplingFormula, logTitle =  paste(i,j,algo,"Result",sep = "_"),
+      #                 other = list("nTree = 1000",importance(fit.forest,type = 1),importance(fit.forest,type = 2)))
+      # outputImg(plottable = fit.forest,hit=480,wid=640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
+      # #内存结果保留
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="test"))
+      # #训练集结果写入内存
+      # cmResultTraining<-data.hznu.teaching.decoupling.training%>%
+      #                   predictTest(testSet = .,resultValue = .$energyClusterName,predictableModel = fit.forest)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$table),
+      #                                                acc=cmResultTraining$overall["Accuracy"],setType="training"))
       rm(fit.forest,cmResult,cmResultTraining)
     } 
     
     ####AdaBoost####
-    if(TRUE){
+    if(FALSE){
       algo<-"AdaBoost"
       
       #10Fold #迭代次数大于10时就会报错
-      fit<-train(form=tenFoldFormula,
-                 data=data.hznu.teaching.decoupling.selected,method = "AdaBoost.M1",
-                 na.action = "na.omit",
-                 trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))
-      cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
-      outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
-                      algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
-                      other = list("nIter = 200",fit$finalModel$importance))
-      rm(fit,cmResult)
+      # fit<-train(form=tenFoldFormula,
+      #            data=data.hznu.teaching.decoupling.selected,method = "AdaBoost.M1",
+      #            na.action = "na.omit",
+      #            trControl=trainControl(method = "cv",number = 10,savePredictions ="final",search = "random"))
+      # cmResult<-confusionMatrix(data=fit$pred$pred,reference = fit$pred$obs)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$table),acc=cmResult$overall["Accuracy"],setType="10-fold"))
+      # outputValidRslt(cm=cmResult, fileName = paste(i,j,algo,"10Fold_Result.txt",sep = "_"),
+      #                 algoName = algo, fmla = tenFoldFormula, logTitle =  paste(i,j,algo,"10Fold_Result",sep = "_"),
+      #                 other = list("nIter = 200",fit$finalModel$importance))
+      # rm(fit,cmResult)
       
       #hold-out 验证法
       fit.boost<-boosting(decouplingFormula,
                           data=data.hznu.teaching.decoupling.training,
                           mfinal = 200,cp=localInitCP)
-      #检查误差演变
-      outputImg(FUN = function(x){
-        plot(x$error,type="o",pch=17,ann=FALSE)
-        title(xlab = "Iteration times",ylab = "Error")
-      },plottable = errorevol(fit.boost,data.hznu.teaching.decoupling.training),
-      hit=480,wid = 640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
-      
-      #这特么输出都不统一，能不能一致点？！
-      cmResult<-predict(fit.boost,data.hznu.teaching.decoupling.test)
-      outputValidRslt(cm=NA,logTitle =paste(i,j,algo,"Result",sep = "_"),algoName = algo,fileName=paste(i,j,algo,"Result.txt",sep = "_"),
-                      FUN = function(fileName=paste(i,j,algo,"Result.txt",sep = "_")){
-                        capture.output(decouplingFormula,file=fileName,append = TRUE)
-                        capture.output(cmResult$error,file=fileName,append = TRUE)
-                        capture.output(cmResult$confusion,file=fileName,append = TRUE)
-                        capture.output(c("nIter = 200"),file=fileName,append = TRUE)
-                        capture.output(fit.boost$importance,file=fileName,append = TRUE)
-                      })
-      #内存结果保留
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$confusion),acc=1-cmResult$error,setType="test"))
-      #训练集结果写入内存
-      cmResultTraining<-predict(fit.boost,data.hznu.teaching.decoupling.training)
-      stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
-                                          data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$confusion),
-                                                     acc=1-cmResultTraining$error,setType="training"))
-      
-      rm(fit.boost,cmResult,cmResultTraining)
+      nn<-predict(fit.boost,data.hznu.teaching.decoupling.test)
+      colnames(nn$prob)<-colnames(nn$confusion)#是个神仙
+      data.hznu.teaching.decoupling.log<-rbind(data.hznu.teaching.decoupling.log,
+                                               data.table(labelRoomDay=data.hznu.teaching.decoupling.test$labelRoomDay,
+                                                          finalState=i,
+                                                          clusterName=j,
+                                                          method="adaboost",
+                                                          type="test",
+                                                          real=data.hznu.teaching.decoupling.test$energyClusterName,
+                                                          pred=nn$class,
+                                                          nn$prob),fill=TRUE)
+     
+      # #检查误差演变
+      # outputImg(FUN = function(x){
+      #   plot(x$error,type="o",pch=17,ann=FALSE)
+      #   title(xlab = "Iteration times",ylab = "Error")
+      # },plottable = errorevol(fit.boost,data.hznu.teaching.decoupling.training),
+      # hit=480,wid = 640,fileName = paste(i,j,algo,"Err.png",sep = "_"))
+      # 
+      # #这特么输出都不统一，能不能一致点？！
+      # cmResult<-predict(fit.boost,data.hznu.teaching.decoupling.test)
+      # outputValidRslt(cm=NA,logTitle =paste(i,j,algo,"Result",sep = "_"),algoName = algo,fileName=paste(i,j,algo,"Result.txt",sep = "_"),
+      #                 FUN = function(fileName=paste(i,j,algo,"Result.txt",sep = "_")){
+      #                   capture.output(decouplingFormula,file=fileName,append = TRUE)
+      #                   capture.output(cmResult$error,file=fileName,append = TRUE)
+      #                   capture.output(cmResult$confusion,file=fileName,append = TRUE)
+      #                   capture.output(c("nIter = 200"),file=fileName,append = TRUE)
+      #                   capture.output(fit.boost$importance,file=fileName,append = TRUE)
+      #                 })
+      # #内存结果保留
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResult$confusion),acc=1-cmResult$error,setType="test"))
+      # #训练集结果写入内存
+      # cmResultTraining<-predict(fit.boost,data.hznu.teaching.decoupling.training)
+      # stat.hznu.decoupling.algoAcc<-rbind(stat.hznu.decoupling.algoAcc,
+      #                                     data.table(algoName=algo,finalState=i,usagePattern=j,count=sum(cmResultTraining$confusion),
+      #                                                acc=1-cmResultTraining$error,setType="training"))
+      # 
+      # rm(fit.boost,cmResult,cmResultTraining)
     }
     
     
@@ -364,9 +409,9 @@ for(i in unique(data.hznu.teaching.decoupling$finalState) ){
  
   }
   ####精确度汇总结果输出####
-  stat.hznu.decoupling.algoAcc$correctCount<-stat.hznu.decoupling.algoAcc$acc*stat.hznu.decoupling.algoAcc$count
-  stat.hznu.decoupling.algoAcc$wrongCount<-stat.hznu.decoupling.algoAcc$count*(1-stat.hznu.decoupling.algoAcc$acc)
-  write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round_final.xlsx",sep = "_"))
+  # stat.hznu.decoupling.algoAcc$correctCount<-stat.hznu.decoupling.algoAcc$acc*stat.hznu.decoupling.algoAcc$count
+  # stat.hznu.decoupling.algoAcc$wrongCount<-stat.hznu.decoupling.algoAcc$count*(1-stat.hznu.decoupling.algoAcc$acc)
+  # write.xlsx(stat.hznu.decoupling.algoAcc,file = paste("HZNU",i,"round_final.xlsx",sep = "_"))
 }
 
 ####批量输出决策树规则####
@@ -395,7 +440,122 @@ for(i in names(list.hznu.decoupling.cart)){
 data.hznu.teaching.decoupling[,.(finalState=finalState[1],
                                  modiSeason=modiSeason[1],
                                  thermoPattern=thermoPattern[1],
-                                 runtime=mean(runtime,na.rm = TRUE)),by=(labelModeSeasonThermal=paste(finalState,modiSeason,thermoPattern,sep = "_"))]
+                                 runtime=mean(runtime,na.rm = TRUE)),
+                              by=(labelModeSeasonThermal=paste(finalState,modiSeason,thermoPattern,sep = "_"))]
+
+
+####尝试画ROC####
+
+tmp.decopling.roc<- data.hznu.teaching.decoupling.log%>%mutate_all(funs(ifelse(is.na(.), 0, .)))%>%as.data.table(.)%>%.[,-c("pred","type")]%>%
+  melt(.,id.vars = c("labelRoomDay","finalState","clusterName","method","real"))%>%.[real==variable]
+list.hznu.decoupling.roc.obj<-list()
+list.hznu.decoupling.roc.mapping<-list()
+#对各工况和各方法构建ROC曲线
+#好像不对
+for(i in unique(tmp.decopling.roc$finalState)){
+  for(j in unique(tmp.decopling.roc$method)){
+    #一个工况下-一个方法-所有两两组合的ROC
+    cat(i,j)
+    list.hznu.decoupling.roc.obj[[i]][[j]]<-
+      multiclass.roc(predictor=tmp.decopling.roc[finalState==i&method==j]$value,
+                     response=tmp.decopling.roc[finalState==i&method==j]$real,plot=TRUE,smooth=FALSE)
+    for(k in 1:length(list.hznu.decoupling.roc.obj[[i]][[j]]$rocs)){
+      if(!exists("nn1")){
+        nn1<-data.table(level1=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$levels[1],
+                        level2=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$levels[2],
+                        sensitivities=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$sensitivities,
+                        specificities=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$specificities)
+      }else{
+        nn1<-rbind(nn1,data.table(level1=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$levels[1],
+                                  level2=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$levels[2],
+                                  sensitivities=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$sensitivities,
+                                  specificities=list.hznu.decoupling.roc.obj[[i]][[j]]$rocs[[k]]$specificities))
+      }
+    }
+    list.hznu.decoupling.roc.mapping[[i]][[j]]<-nn1
+    rm(nn1)
+  }
+}
+
+ggplot(data=list.hznu.decoupling.roc.mapping$heating$randomForest,
+       aes(x=1-specificities,y=sensitivities,color=(com=paste(level1,level2))))+geom_point(size=0.5)+geom_line()
+
+
+##multiROC包
+sub<-sample(1:nrow(data.hznu.teaching.decoupling.log[type=="train"]),round(nrow(data.hznu.teaching.decoupling.log[type=="train"]))*7/10)
+# rbind(data.hznu.teaching.decoupling.log[type=="train"][sub],
+
+tmp.multi.roc<-data.hznu.teaching.decoupling.log[type=="test"]%>%
+               .[,-"type"]%>%mutate_all(funs(ifelse(is.na(.), 0, .)))%>%
+                mutate(.,MidEnergy_LongTime_true=ifelse(real=="MidEnergy_LongTime",1,0),
+                                                          HighEnergy_true=ifelse(real=="HighEnergy",1,0),
+                                                          LowEnergy_true=ifelse(real=="LowEnergy",1,0),
+                                                          MidEnergy_MidTime_true=ifelse(real=="MidEnergy_MidTime",1,0)
+                                                          )%>%as.data.table(.)
+
+for(i in 7:10){
+  colnames(tmp.multi.roc)[i] <- paste(colnames(tmp.multi.roc)[i],"_pred_PRD",sep = "")
+}
+list.hznu.decoupling.multiROC<-list()
+for(i in unique(tmp.multi.roc$finalState)){
+  for(j in unique(tmp.multi.roc$method)){
+    # cat(i,j)
+    list.hznu.decoupling.multiROC[[i]][[j]]<-multi_roc(tmp.multi.roc[finalState==i&method==j,7:14])
+  }
+}
+
+confusionMatrix(data=data.hznu.teaching.decoupling.log[finalState==i&method==j]$pred%>%as.factor(.),
+                reference = data.hznu.teaching.decoupling.log[finalState==i&method==j]$real%>%as.factor(.))
+
+data.hznu.teaching.decoupling.log%>%{
+  for(i in unique(.$finalState)){
+    for(j in unique(.$method)){
+      cat("\n",i,j,"\n")
+      cat(nrow(.[finalState==i&method==j&real==pred])/nrow(.[finalState==i&method==j]))
+    }
+  }
+}
+#train
+# heating CART 
+# 0.7109701
+# heating randomForest 
+# 0.9751587
+# heating adaboost 
+# 0.8944696
+# cooling CART 
+# 0.7749034
+# cooling randomForest 
+# 0.9653285
+# cooling adaboost 
+# 0.8739802
+
+#test
+# heating adaboost 
+# 0.7031137
+# heating CART 
+# 0.6741492
+# heating randomForest 
+# 0.73063
+# cooling adaboost 
+# 0.7860206
+# cooling CART 
+# 0.7675815
+# cooling randomForest 
+# 0.7950257
+
+#full
+# heating CART 
+# 0.7035963
+# heating randomForest 
+# 0.9261891
+# heating adaboost 
+# 0.8561485
+# cooling CART 
+# 0.7734375
+# cooling randomForest 
+# 0.9312328
+# cooling adaboost 
+# 0.8563702
 
 
 

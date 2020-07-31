@@ -69,10 +69,10 @@ nn<-data.hznu.teaching.decoupling[,.(meanSetTemp=mean(setTemp,na.rm=TRUE)),by=(m
 #室外温度与设定温度的可视化
 ggplot()+geom_boxplot(data=data.hznu.teaching.decoupling,aes(x=(month=as.factor(substr(date,6,7))),y=setTemp),outlier.colour = NA,width=0.45)+
   geom_point(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1),size=3,shape=2,color="red")+geom_line(data=nn,aes(x=as.factor(month),y=meanOutTemp,group=1,color="red"),size=0.75)+
-  geom_point(data=nn,aes(x=factor(month),y=meanSetTemp,group=1),size=3)+geom_line(data=nn,aes(x=month,y=meanSetTemp,group=1))+
-  scale_y_continuous(breaks = seq(0,35,2.5))+
+  geom_point(data=nn,aes(x=factor(month),y=meanSetTemp,group=1),size=2)+geom_line(data=nn,aes(x=month,y=meanSetTemp,group=1))+
+  scale_y_continuous(breaks = seq(0,35,5))+
   theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  theme(axis.text=element_text(size=16),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
+  theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),strip.text =element_text(size=16),
         legend.text = element_text(size=16))
 
 

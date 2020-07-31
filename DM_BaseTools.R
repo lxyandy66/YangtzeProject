@@ -38,6 +38,7 @@ library(knncat)
 library(car)
 library(forecast)
 library(tseries)
+library(multiROC)
 set.seed(711)
 
 ####预处理部分####
