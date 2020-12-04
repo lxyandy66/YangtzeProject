@@ -497,16 +497,48 @@ for(i in 7:10){
   colnames(tmp.multi.roc)[i] <- paste(colnames(tmp.multi.roc)[i],"_pred_PRD",sep = "")
 }
 list.hznu.decoupling.multiROC<-list()
+stat.hznu.decoupling.index<-data.table(finalState="",method="",indexName="",value=-999)[-1]
 for(i in unique(tmp.multi.roc$finalState)){
   for(j in unique(tmp.multi.roc$method)){
     # cat(i,j)
     list.hznu.decoupling.multiROC[[i]][[j]]<-multi_roc(tmp.multi.roc[finalState==i&method==j,7:14])
+    nn<-confusionMatrix(data=data.hznu.teaching.decoupling.log[finalState==i&method==j&type=="train"]$pred%>%as.factor(.),
+                        reference = data.hznu.teaching.decoupling.log[finalState==i&method==j&type=="train"]$real%>%as.factor(.))
+    #再次统计kappa等统计量
+    stat.hznu.decoupling.index<-rbind(stat.hznu.decoupling.index,
+                                      data.table(finalState=i,method=j,indexName="MarcoAUC",
+                                                 value=list.hznu.decoupling.multiROC[[i]][[j]]$AUC$PRD$macro),
+                                      data.table(finalState=i,method=j,indexName="MicroAUC",
+                                                 value=list.hznu.decoupling.multiROC[[i]][[j]]$AUC$PRD$micro),
+                                      data.table(finalState=i,method=j,indexName="Kappa",value=nn$overall["Kappa"]),
+                                      data.table(finalState=i,method=j,indexName="Accuracy",value=nn$overall["Accuracy"]))
+    rm(nn)
   }
 }
 
-confusionMatrix(data=data.hznu.teaching.decoupling.log[finalState==i&method==j]$pred%>%as.factor(.),
-                reference = data.hznu.teaching.decoupling.log[finalState==i&method==j]$real%>%as.factor(.))
+# ROC绘图
+for(i in unique(tmp.multi.roc$finalState)){
+  for(j in unique(tmp.multi.roc$method)){
+    nn<-list.hznu.decoupling.multiROC[[i]][[j]]%>%plot_roc_data(.)%>%as.data.table(.)%>%.[!Group %in% c("Micro","Macro")]%>%
+      ggplot(data=.,aes(x = 1-Specificity, y=Sensitivity,color=Group,lty=Group))+
+       geom_line(size=1)+
+      geom_segment(aes(x = 0, y = 0, xend = 1, yend = 1),
+                   colour='grey', linetype = 'dotdash')+
+      theme_bw() + scale_color_brewer(palette="Dark2")+
+      theme(plot.title = element_text(hjust = 0.5), 
+            axis.text=element_text(size=18),
+            axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),
+            legend.justification=c(1, 0), legend.position=c(.95, .05),
+            legend.title=element_blank(), 
+            legend.background = element_rect(fill=NULL, size=0.5, 
+                                             linetype="solid", colour ="black"))
+      ggsave(plot=nn,file=paste(i,j,".png",sep = ""),width=8,height = 6,dpi = 100)#管道函数默认第一个有点麻烦
+  }
+}
 
+# geom_path(aes(color = Group, linetype=Method), size=1.5) +
+  geom_segment(aes(x = 0, y = 0, xend = 1, yend = 1),
+               colour='grey', linetype = 'dotdash')
 data.hznu.teaching.decoupling.log%>%{
   for(i in unique(.$finalState)){
     for(j in unique(.$method)){
