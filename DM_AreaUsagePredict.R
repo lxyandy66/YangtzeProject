@@ -344,6 +344,17 @@ backup.hznu.area.predict.log<-data.hznu.area.predict.log#2020.02.14 ±∏∑›¡À8µ„”√≤
 backup.hznu.area.predict.use<-data.hznu.area.predict.use#2020.02.14 ±∏∑›¡À8µ„”√≤ŒøºÃÏ∆Ωæ˘¥˙ÃÊµƒ÷µ
 
 
+####–¬Ω®“ª∏ˆ”≈ªØµƒknn####
+data.hznu.area.predict.use$optKnn<--999
+data.hznu.area.predict.use$optKnn<-apply(X = data.hznu.area.predict.use[,c("fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")],
+                                         MARGIN = 1,FUN = function(x){
+                                           return(ifelse(abs(x[1]-x[3])>abs(x[1]-x[2]),
+                                                         x[2],x[3]))
+                                         })
+
+
+
+
 #–°¬€Œƒ”√ ±º‰…∏—°
 paperTime<-list(Summer_warm=c(sprintf("2017-06-%02d",19:30),"2017-07-01","2017-07-02"),
                 Summer=c(sprintf("2017-08-%02d",1:12),"2017-07-30","2017-07-31"),
@@ -355,17 +366,17 @@ paperTime<-list(Summer_warm=c(sprintf("2017-06-%02d",19:30),"2017-07-01","2017-0
 for(i in names(paperTime)){
   data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {#[substr(date,1,7)=="2017-09"]
       cat("\n",i,
-          "\t",RMSE(pred = .$simpleKnnFullOnRatio,obs = .$fullOnRatio,na.rm = TRUE),
-          "\t",getRSquare(pred = .$simpleKnnFullOnRatio,ref = .$fullOnRatio),
-          "\t",getMAPE(yPred = .[fullOnRatio!=0]$simpleKnnFullOnRatio, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
+          "\t",RMSE(pred = .$optKnn,obs = .$fullOnRatio,na.rm = TRUE),
+          "\t",getRSquare(pred = .$optKnn,ref = .$fullOnRatio),
+          "\t",getMAPE(yPred = .[fullOnRatio!=0]$optKnn, yLook = .[fullOnRatio!=0]$fullOnRatio))#0.5800756
   }
 }
 # tsFullOnRatio,simpleKnnFullOnRatio,knnFullOnRatio,svmInitPred,svmIterPred
 
 ####ªÊÕº ‰≥ˆ####
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,#∏ƒ≥…¡À◊®¿˚”√substr(date,1,7)=="2017-06",#
-                                       c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio","knnFullOnRatio")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer,#∏ƒ≥…¡À◊®¿˚”√substr(date,1,7)=="2017-06",#
+                                       c("datetime","weekCount","weekday","modiSeason","fullOnRatio","optKnn")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+#facet_wrap(~modiSeason,nrow = 2)+
   scale_y_continuous(breaks = seq(0,100,0.05))+
@@ -374,7 +385,7 @@ ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,#∏ƒ≥…¡À◊®
 
 
 #2018-01-16 08:00:00<-svm 0.021
-nn<-data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio","svmIterPred")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+nn<-data.hznu.area.predict.use[date %in% paperTime$Summer,c("datetime","weekCount","weekday","modiSeason","fullOnRatio","simpleKnnFullOnRatio","svmIterPred")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
   mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount"))
 ggplot(nn,aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))

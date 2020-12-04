@@ -336,14 +336,14 @@ ggplot(data=data.hznu.teaching.energy.std,aes(x=runtime,y=sumElec,color=energyCl
   theme_bw()
 
 #检查教室容量与EUI或绝对能耗分布关系
-ggsave(filename = "制冷_教室座位数与能耗值.png",width = 5,height = 5,dpi=200,
+ggsave(filename = "制冷_教室座位数与EUI.png",width = 5,height = 5,dpi=200,
        plot=ggplot(data=data.hznu.teaching.energy.std[finalState=="cooling"&!is.na(modiSeat)&modiSeat!=0] %>% mutate(.,modiSeat=as.factor(modiSeat)),
-                   aes(x=modiSeat,y=sumElec))+#ylim(0,2.5)+ color=energyClusterName
+                   aes(x=modiSeat,y=areaEUI))+#ylim(0,2.5)+ color=energyClusterName
          geom_boxplot(outlier.colour = NA,width=0.38)+stat_summary(fun.y = "mean",geom = "point")+stat_summary(fun.y = "mean",geom = "line",group=1)+
          # facet_wrap(~finalState)+
          # geom_line(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
          # geom_point(data=stat.hznu.teaching.energy.bySeat[modiSeat!=0],aes(x=factor(modiSeat),y=meanAreaEUI,group=finalState))+
-         theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+ylim(0,150)+
+         theme_bw()+ theme(axis.text.x = element_text(angle = 45, hjust = 1))+scale_y_continuous(breaks = seq(0,200,0.5))+ylim(0,1.5)+
          theme(axis.text=element_text(size=14),axis.title=element_text(size=16,face="bold"),strip.text =element_text(size=14),
                legend.text = element_text(size=14))
        )
@@ -436,12 +436,18 @@ ggplot(data=data.hznu.teaching.decoupling[finalState=="cooling"],aes(x=clusterNa
   geom_boxplot()+stat_summary(fun.y = "mean",geom = "point",color="red")#+facet_wrap(~finalState)
 
 #不同季节下行为模式和能耗
-ggplot(data=data.hznu.teaching.energy.std[clusterName %in% c("Forenoon","Afternoon")&finalState=="cooling"&modiSeat!=0],
-       aes(x=substr(date,6,7),fill=energyClusterName))+geom_bar(position = "fill")+facet_wrap(~clusterName+areaScale,nrow=2)#真没啥区别
+ggplot(data=data.hznu.teaching.decoupling[modiSeason=="Summer"],
+       aes(x=clusterName,fill=energyClusterName))+geom_bar(position = "dodge")#+facet_wrap(~clusterName+areaScale,nrow=2)#真没啥区别
 
 #检查16台空调的教室的空调使用情况
 nn<-data.hznu.teaching.energy.std[acCount==16]
 ggplot(data = data.hznu.teaching.energy.std[acCount==16],aes(x=meanAcUsed,color=roomCode))+geom_density()
+
+#检查能耗模式分布情况
+# 包括各规模教室的能耗模式
+# 包括各季节主要能耗模式
+ggplot(data = data.hznu.teaching.decoupling,aes(x=areaScale,fill=energyClusterName))+geom_bar()+facet_wrap(.~modiSeason)
+ggplot(data = data.hznu.teaching.decoupling,aes(x=modiSeason,fill=energyClusterName))+geom_bar(position = "dodge")+facet_wrap(.~areaScale)
 
 #检查各能耗模式的EUI分布情况
 ggplot(data=data.hznu.teaching.energy.std,aes(x=energyClusterName,y=areaEUI))+geom_boxplot(outlier.colour = NA,width=0.5)+

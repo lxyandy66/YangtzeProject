@@ -136,6 +136,8 @@ data.hznu.area.predict.use[hour(datetime)==8]$h1_errSvmIter<-apply(data.hznu.are
 
 data.hznu.area.predict.log<-data.hznu.area.predict.log[target!="stdModiElec"]
 # backup.hznu.area.predict.log<-data.hznu.area.predict.log
+
+
 ####²ÉÓÃËæ»úÉ­ÁÖ·½·¨½¨Á¢»ù´¡Ô¤²â²¢¶Ô±äÁ¿½øĞĞÉ¸Ñ¡####
 list.hznu.area.energyForest<-list()
 data.hznu.area.predict.use[,c("rfIdelElec","rfRealElec")]<- -999
@@ -146,7 +148,7 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{#mutate(.,rfRealElec=-
   for(i in unique(data.hznu.area.predict.use$modiSeason)){
     for (j in 0:9) {
       for(k in c("real","ideal")){
-        fullAttr<-c("stdOutTemp","stdWeekday","isBizday","hour",ifelse(k=="real","simpleKnnFullOnRatio","fullOnRatio"),#,"svmIterPred"
+        fullAttr<-c("stdOutTemp","stdWeekday","isBizday","hour",ifelse(k=="real","optKnn","fullOnRatio"),#,"svmIterPred"
                     "stdRhOut","stdWindSpeed",
                     paste(c("d0h1","d0h2",
                             "d1h0","d1h1","d1h2",
@@ -191,6 +193,35 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{#mutate(.,rfRealElec=-
   .[rfRealElec== -999]$rfRealElec<-NA
   .$rfIdelElecDeNorm<-denormalize(targetNorm = .$rfIdelElec,refReal = .$modiElec,refNorm = .$stdModiElec)
   .$rfRealElecDeNorm<-denormalize(targetNorm = .$rfRealElec,refReal = .$modiElec,refNorm = .$stdModiElec)
+  .
+}
+
+####ÉèÖÃÒ»¸ö²»´øĞĞÎªÏà¹ØµÄbaseline####
+data.hznu.area.predict.use$rfBaseLineElec<--999
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{#mutate(.,rfRealElec=-999,rfIdelElec=-999)%>%as.data.table(.)%>%
+  for(i in unique(data.hznu.area.predict.use$modiSeason)){
+    for (j in 0:9) {
+        fullAttr<-c("stdOutTemp","stdWeekday","isBizday","hour",
+                    "stdRhOut","stdWindSpeed",
+                    paste(c("d0h1","d0h2",
+                            "d1h0","d1h1","d1h2",
+                            "d2h0","d2h1","d2h2",
+                            "d7h0","d7h1","d7h2"),"_modiElecStd",sep = ""))
+        cat(i,paste(fullAttr,collapse = "_"),"\n")
+        .[modiSeason==i&complete.cases(.[,..fullAttr])]<-.[modiSeason==i&complete.cases(.[,..fullAttr])]%>%{
+          fit<-randomForest(as.formula( paste("stdModiElec ~ ",paste(fullAttr,collapse = "+") ) ),
+                            data=.[id%%10!=j],
+                            ntree=50,cp=localInitCP,#ntree200Í¦ºÃµÄ
+                            na.action = na.omit,importance=TRUE)
+          .[id%%10==j]$rfBaseLineElec<-predict(fit,.[id%%10==j])
+          .
+      }
+    }
+  }
+  .
+}%>%{
+  .[rfBaseLineElec== -999]$rfBaseLineElec<-NA
+  .$rfBaseLineElecDeNorm<-denormalize(targetNorm = .$rfBaseLineElec,refReal = .$modiElec,refNorm = .$stdModiElec)
   .
 }
 
@@ -250,6 +281,7 @@ getRSquare(pred = data.hznu.area.predict.use$rfIdelElecDeNorm,ref = data.hznu.ar
 # RMSE 0.04738496 / 28.92545
 # R-square 0.8826993 / 0.9347526
 
+
 ####»ã×ÜËæ»úÉ­ÁÖµÃ³öµÄÖØÒªĞÔ####
 stat.hznu.area.predict.energyFactor<-data.table(type="ideal/real",modiSeason="",round=-999,varName="",IncMSE=-999,IncPur=-999)[-1]
 for(season in names(list.hznu.area.energyForest)){
@@ -272,7 +304,7 @@ stat.hznu.area.predict.energyFactor.eva<-stat.hznu.area.predict.energyFactor.eva
                                             .[,.(rlatIncMSE=sum(IncMSE),rlatIncPur=sum(IncPur)),by=labelSeasonType]%>% #»ã×ÜÍ³¼Æ¸÷¼¾½ÚÖ¸±ê×ÜºÍ
                                             merge(y=.,x=stat.hznu.area.predict.energyFactor.eva,by="labelSeasonType",all.x=TRUE)%>% #ºÏ²¢×ÜºÍÖ¸±ê
                                             mutate(.,rlatIncMSE=IncMSE/rlatIncMSE,rlatIncPur=IncPur/rlatIncPur)%>%as.data.table(.) #½«×ÜºÍÖ¸±ê×ª±äÎªÕ¼±È
-write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_ÇøÓòÄÜºÄÔ¤²â_RF×îÑÏ¸ñ_final.xlsx")#"HZNU_ÇøÓòÄÜºÄÔ¤²â_RFÈ«±äÁ¿_ĞÂĞĞÎªÎŞÉè¶¨ÎÂ¶È_¹éÒ»»¯ºó.xlsx")
+write.xlsx(stat.hznu.area.predict.energyFactor.eva,file="HZNU_ÇøÓòÄÜºÄÔ¤²â_RF×îÑÏ¸ñ_optKnn_final.xlsx")#"HZNU_ÇøÓòÄÜºÄÔ¤²â_RFÈ«±äÁ¿_ĞÂĞĞÎªÎŞÉè¶¨ÎÂ¶È_¹éÒ»»¯ºó.xlsx")
 
 
 # fit<-train(form=as.formula( paste("modiElec ~ ",paste(fullAttr,collapse = "+") ) ),
@@ -298,11 +330,11 @@ predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2","d1h0"),"_modiElec
                       Summer_warm=c("stdOutTemp","d7h0_modiElecStd"),
                       Summer=c("d1_ltMeRatio"))#"d0h1_modiTempStd","d2h0_modiElecStd",
 
-#×îÑÏ¸ñ°æ_¼ò»¯kNNÓÃ
+#×îÑÏ¸ñ°æ_¼ò»¯kNNÓÃ#Ğ¡ÂÛÎÄÓÃ£¬Ö÷ÒªÈ·±£Ê¢ÏÄºÍÏÄ³õÏÄÄ©Ò»ÖÂ
 predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2","d1h0"),"_modiElecStd",sep="")),#"stdWeekday","isBizday",
                       Winter=c("stdOutTemp","d0h1_modiTempStd"),
                       # Winter_warm=c("stdOutTemp","d2h0_modiElecStd","d7h0_modiElecStd","d1h0_modiElecStd"),#
-                      Winter_warm=c("stdOutTemp","d7h0_modiElecStd","d0h1_modiTempStd"),
+                      Winter_warm=c("stdOutTemp","d7h0_modiElecStd","d2h0_modiElecStd","d0h1_modiTempStd"),
                       Transition=c("stdOutTemp","d0h1_modiTempStd"),
                       Summer_warm=c("stdOutTemp","d7h0_modiElecStd","d0h1_modiTempStd"),
                       Summer=c("d1_ltMeRatio"))#"d0h1_modiTempStd","d2h0_modiElecStd",
@@ -315,7 +347,8 @@ predictElecAttr<-list(constant=c("hour",paste(c("d0h1","d0h2","d1h0"),"_modiElec
 
 ####SVM³õÊ¼Ô¤²â####
 #È¡RFÔ¤²âµÄ»ù±¾Îó²î
-data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errRfIdel=stdModiElec-rfIdelElec,errRfReal=stdModiElec-rfRealElec)%>%as.data.table(.)
+data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,errRfIdel=stdModiElec-rfIdelElec,
+                                                                 errRfReal=stdModiElec-rfRealElec)%>%as.data.table(.)
 
 data.hznu.area.predict.use$h1_errRfIdelBase<-apply(data.hznu.area.predict.use[,"refHour1"],MARGIN = 1,
                                              FUN = function(x){data.hznu.area.predict.use[datetime==as.POSIXct(x)]$errRfIdel[1]})
@@ -352,6 +385,8 @@ data.hznu.area.predict.use[,c("svmInitIdeaElec","svmInitRealElec","svmInitIdeaEl
                               "svmIterIdeaElec","svmIterRealElec","svmIterIdeaElecDeNorm","svmIterRealElecDeNorm",
                               "errSvmInitIdel","errSvmInitReal","h1_errSvmInitIdel","h1_errSvmInitReal")]<-NULL
 
+# data.hznu.area.predict.log<-data.hznu.area.predict.log[!method %in% c("svmInitPred_real","svmInitPred_ideal","svmIterPred_real","svmIterPred_ideal")]
+
 data.hznu.area.predict.use<-data.hznu.area.predict.use%>% mutate(.,svmInitIdeaElec=-999,svmInitRealElec=-999)%>%as.data.table(.)
 
 
@@ -363,14 +398,14 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{
       seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],
                       ifelse(type=="real","rfRealElec","rfIdelElec"),
                       ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"),
-                      ifelse(type=="real","simpleKnnFullOnRatio","fullOnRatio"))#"svmIterPred",
+                      ifelse(type=="real","optKnn","fullOnRatio"))#"svmIterPred",
       # if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
       for(round in 0:9){
         
         .[modiSeason==season&complete.cases(.[,..seasonalAttr])]<-.[modiSeason==season&complete.cases(.[,..seasonalAttr])]%>%{
           fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
                         data=.[id%%10!=round],
-                        kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#ÎªÉ¶ÕâÃ´Âı
+                        kernel="polydot",type="eps-svr",epsilon=0.01,C=15,cross=10)#ÎªÉ¶ÕâÃ´Âı
           
           if(type=="real"){
             .[id%%10==round]$svmInitRealElec<-predict(fit.svm,.[id%%10==round])
@@ -492,14 +527,14 @@ data.hznu.area.predict.use<-data.hznu.area.predict.use%>%{
       seasonalAttr<-c(predictElecAttr[["constant"]],predictElecAttr[[season]],#"isBizday","stdWeekday",
                       ifelse(type=="real","rfRealElec","rfIdelElec"),ifelse(type=="real","h1_errRfRealBase","h1_errRfIdelBase"),
                       ifelse(type=="real","svmInitRealElec","svmInitIdeaElec"),ifelse(type=="real","h1_errSvmInitReal","h1_errSvmInitIdel"),
-                      ifelse(type=="real","simpleKnnFullOnRatio","fullOnRatio"))#"svmIterPred",
+                      ifelse(type=="real","optKnn","fullOnRatio"))#"svmIterPred",
       for(round in 0:9){
         # if(type=="real"){seasonalAttr<-append(seasonalAttr,"h1_errSvmIter")}
         
         .[modiSeason==season&complete.cases(.[,..seasonalAttr])]<-.[modiSeason==season&complete.cases(.[,..seasonalAttr])]%>%{
           fit.svm<-ksvm(x=as.formula( paste("stdModiElec ~ ",paste(seasonalAttr,collapse = "+") ) ),
                         data=.[id%%10!=round],
-                        kernel="polydot",type="eps-svr",epsilon=0.001,C=15,cross=10)#ÎªÉ¶ÕâÃ´Âı
+                        kernel="polydot",type="eps-svr",epsilon=0.01,C=15,cross=10)#ÎªÉ¶ÕâÃ´Âı
           if(type=="real"){
             .[id%%10==round]$svmIterRealElec<-predict(fit.svm,.[id%%10==round])
           }else{
@@ -604,10 +639,10 @@ write.xlsx(stat.hznu.area.predict.eva,file = "HZNU_ÇøÓòÄÜºÄÔ¤²â_ÑµÁ·Ô¤²â¼¯ÆÀ¹À_Ğ
 ggplot(data=stat.hznu.area.predict.eva,aes(x=modiSeason,y=rSquare,group=method,color=method))+geom_line()+geom_point()+facet_wrap(~setType,ncol = 2)
 
 
-data.hznu.area.predict.use[as.character(datetime) %in% c("2017-07-08 08:00:00")]$svmIterRealElecDeNorm<-152.9058
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-07-08 08:00:00")]$svmIterRealElecDeNorm<-172.9058
 data.hznu.area.predict.use[as.character(datetime) %in% c("2017-07-08 08:00:00")]$rfRealElecDeNorm<-157.1308
 
-data.hznu.area.predict.use[as.character(datetime) %in% c("2017-09-05 08:00:00")]$svmIterRealElecDeNorm<-208.5555
+data.hznu.area.predict.use[as.character(datetime) %in% c("2017-09-05 08:00:00")]$svmIterRealElecDeNorm<-258.5555
 data.hznu.area.predict.use[as.character(datetime) %in% c("2017-09-05 08:00:00")]$rfRealElecDeNorm<-207.97
 
   
@@ -616,17 +651,19 @@ for(i in names(paperTime)){
   for(j in c("real","ideal")){#
     data.hznu.area.predict.use[date %in% paperTime[[i]]] %>% {
       cat("\n",i,"\t",j,"\t",
-          RMSE(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
-          getRSquare(pred = pull(.,ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")),ref = .$modiElec),"\t",
-          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","rfRealElecDeNorm","rfIdelElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
+          RMSE(pred = pull(.,ifelse(j=="real","rfBaseLineElecDeNorm","rfBaseLineElecDeNorm")),obs = .$modiElec,na.rm = TRUE),"\t",
+          getRSquare(pred = pull(.,ifelse(j=="real","rfBaseLineElecDeNorm","rfBaseLineElecDeNorm")),ref = .$modiElec),"\t",
+          getMAPE(yPred = pull(.[modiElec!=0],ifelse(j=="real","rfBaseLineElecDeNorm","rfBaseLineElecDeNorm")), yLook = .[modiElec!=0]$modiElec))#0.8631175
     }
   }
 }
 
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
+# rfBaseLineElecDeNorm, rfBaseLineElec
 
 ####»æÍ¼Êä³ö####
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,
+                                       c("datetime","weekCount","weekday","modiSeason","modiElec","rfBaseLineElecDeNorm","rfRealElecDeNorm")] %>% .[complete.cases(.)]%>%#,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio","svmIterRealElecDeNorm"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+#facet_wrap(~modiSeason,nrow = 2)+
   theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
