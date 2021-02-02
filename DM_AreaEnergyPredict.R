@@ -663,9 +663,10 @@ for(i in names(paperTime)){
 
 ####»æÍ¼Êä³ö####
 ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,
-                                       c("datetime","weekCount","weekday","modiSeason","modiElec","rfBaseLineElecDeNorm","rfRealElecDeNorm")] %>% .[complete.cases(.)]%>%#,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio","svmIterRealElecDeNorm"
+                                       c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")] %>% .[complete.cases(.)]%>%#,"rfBaseLineElecDeNorm","simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio","svmIterRealElecDeNorm"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line()+geom_point(size=2)+#facet_wrap(~modiSeason,nrow = 2)+
+  scale_x_datetime(date_labels="%m-%d",date_breaks  ="1 day")+
   theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
 
 

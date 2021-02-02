@@ -375,11 +375,12 @@ for(i in names(paperTime)){
 
 ####绘图输出####
 ggplot(data = data.hznu.area.predict.use,aes(y=rlatTsErr))+geom_boxplot()+ylim(0,2)
-ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer,#改成了专利用substr(date,1,7)=="2017-06",#
+ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,#改成了专利用substr(date,1,7)=="2017-06",#
                                        c("datetime","weekCount","weekday","modiSeason","fullOnRatio","optKnn")] %>% #,"simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio"
          mutate(.,year=substr(datetime,1,4),date=date(datetime))%>% melt(.,id.var=c("datetime","modiSeason","year","date","weekday","weekCount")),
        aes(x=datetime,y=value,color=variable,shape=variable,lty=variable,group=paste(date,variable)))+geom_line(size=0.7)+geom_point(size=2)+#facet_wrap(~modiSeason,nrow = 2)+
   scale_y_continuous(breaks = seq(0,100,0.05))+
+  scale_x_datetime(date_labels="%m-%d",date_breaks  ="1 day")+#针对datetime类型的坐标轴处理，但是这个break的参数很迷惑
   theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
 #一定注意这个group参数，很有用，此处直接将分组变为了日期与方法
 
