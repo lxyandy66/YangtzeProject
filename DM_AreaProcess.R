@@ -488,4 +488,12 @@ ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime
 ggplot(data=(stat.hznu.area.completeCheck%>% mutate(.,date=as.Date(date))%>% mutate(.,isWeekday=isWeekday(date),year=as.factor(year(date)),monthDay=format(date,format="%m-%d"),sumCount=useCount+energyCount)),
        aes(x=monthDay,y=sumCount,color=isWeekday,shape=year,group=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
+####查看逐小时的能耗情况####
+ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),
+                                       c("datetime","modiSeason","isBizday","modiElec")]%>% 
+         .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec")),aes(x=as.factor(hour(datetime)),y=modiElec))+
+  geom_boxplot()+
+  stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+
+  facet_wrap(.~isBizday+modiSeason,nrow=2)+
+  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))#+ylim(0,150)
 

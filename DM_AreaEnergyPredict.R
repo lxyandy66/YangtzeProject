@@ -669,7 +669,15 @@ ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,
   scale_x_datetime(date_labels="%m-%d",date_breaks  ="1 day")+
   theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
 
+####回归线尝试####
+ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),c("modiSeason","isBizday","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")]%>% 
+         .[complete.cases(.)]%>%melt(.,id.var=c("modiSeason","isBizday","modiElec")),aes(x=modiElec,y=value,color=variable))+geom_point()+facet_wrap(.~modiSeason,nrow=2)
 
+####逐小时误差分布####
+ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),
+                                       c("datetime","modiSeason","isBizday","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")]%>% 
+         .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec")),aes(x=as.factor(hour(datetime)),y=abs(modiElec-value),color=variable))+
+  geom_boxplot()+facet_wrap(.~isBizday+modiSeason,nrow=2)+ylim(0,150)
 
 for(j in names(paperTime)){
   ggsave(file=paste("modiElec_RF_",j,".png",sep = ""),

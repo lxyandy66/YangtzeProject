@@ -39,6 +39,7 @@ library(car)
 library(forecast)
 library(tseries)
 library(multiROC)
+library(rjson)
 set.seed(711)
 
 ####预处理部分####
@@ -554,6 +555,15 @@ listToDataTable<-function(list){
     dt<-rbind(dt,list[[i]])
   }
   return(dt)
+}
+
+####将数据框类型为列表的列根据变量名取出数据####
+# 例如：list=data$dataList，dataList为list，list中有key1，key2
+# 根据key取出dataList列中的数据并填补缺失值
+extractFromList<-function(list,key,na.filler=NA){
+  return(sapply(list, simplify = TRUE,FUN = function(x){
+    return(ifelse(key%in%names(x),unlist(x[[key]]),na.filler))
+  }))
 }
 
 
