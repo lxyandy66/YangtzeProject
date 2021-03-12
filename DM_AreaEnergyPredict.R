@@ -661,6 +661,7 @@ for(i in names(paperTime)){
 # svmInitRealElecDeNorm,svmInitIdeaElecDeNorm,rfIdelElecDeNorm,rfRealElecDeNorm,svmIterRealElecDeNorm,svmIterIdeaElecDeNorm
 # rfBaseLineElecDeNorm, rfBaseLineElec
 
+
 ####绘图输出####
 ggplot(data=data.hznu.area.predict.use[date %in% paperTime$Summer_warm,
                                        c("datetime","weekCount","weekday","modiSeason","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")] %>% .[complete.cases(.)]%>%#,"rfBaseLineElecDeNorm","simpleKnnFullOnRatio","svmInitPred","svmIterPred","knnFullOnRatio","tsFullOnRatio","svmIterRealElecDeNorm"
@@ -674,10 +675,24 @@ ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTi
          .[complete.cases(.)]%>%melt(.,id.var=c("modiSeason","isBizday","modiElec")),aes(x=modiElec,y=value,color=variable))+geom_point()+facet_wrap(.~modiSeason,nrow=2)
 
 ####逐小时误差分布####
-ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),
-                                       c("datetime","modiSeason","isBizday","modiElec","rfRealElecDeNorm","svmIterRealElecDeNorm")]%>% 
-         .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec")),aes(x=as.factor(hour(datetime)),y=abs(modiElec-value),color=variable))+
-  geom_boxplot()+facet_wrap(.~isBizday+modiSeason,nrow=2)+ylim(0,150)
+ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer),#&isBizday==TRUE,,"rfBaseLineElecDeNorm"
+                                       c("datetime","modiSeason","isBizday","modiElec" ,"rfRealElecDeNorm","svmIterRealElecDeNorm")]%>% #
+         .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec")),
+       aes(x=as.factor(hour(datetime)),y=abs(modiElec-value)/modiElec,color=variable))+
+  geom_boxplot(width=0.5)+
+  # facet_wrap(.~modiSeason,nrow=2)+
+  stat_summary(fun.y = "mean",geom = "point",size=2,mapping=aes(group=variable))+#stat下面的分组要加mapping
+  stat_summary(fun.y = "mean",geom = "line",mapping=aes(group=variable))+ylim(0,0.5)+
+  theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16),legend.position = c(0.9,0.85))
+
+
+stat.hznu.area.predict.hourlyErr<-data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),#&isBizday==TRUE,
+                           c("datetime","modiSeason","isBizday","modiElec","rfBaseLineElecDeNorm" ,"rfRealElecDeNorm","svmIterRealElecDeNorm")]%>% #
+  .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec"))%>%
+  aggregate(data=.,abs(modiElec-value)/modiElec~modiSeason+variable+as.factor(hour(datetime)),mean)
+names(stat.hznu.area.predict.hourlyErr)<-c("modiSeason","variable","hour","rlatErr")
+ggplot(data=stat.hznu.area.predict.hourlyErr,aes(x=hour,y=rlatErr,color=variable,shape=variable,group=variable))+geom_point()+geom_line()+facet_wrap(.~modiSeason,nrow=2)
+
 
 for(j in names(paperTime)){
   ggsave(file=paste("modiElec_RF_",j,".png",sep = ""),

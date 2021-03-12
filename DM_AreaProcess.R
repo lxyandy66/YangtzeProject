@@ -489,11 +489,22 @@ ggplot(data=(stat.hznu.area.completeCheck%>% mutate(.,date=as.Date(date))%>% mut
        aes(x=monthDay,y=sumCount,color=isWeekday,shape=year,group=year))+geom_line()+geom_point()+facet_wrap(~year,ncol=1)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ####查看逐小时的能耗情况####
-ggplot(data=data.hznu.area.predict.use[date %in% c(paperTime$Summer_warm,paperTime$Summer),
+ggplot(data=data.hznu.area.predict.use[modiSeason%in%c("Summer"),#,"Summer_warm" date %in% c(paperTime$Summer,paperTime$Summer_warm),#& isBizday==TRUE,#,paperTime$Summer
                                        c("datetime","modiSeason","isBizday","modiElec")]%>% 
          .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec")),aes(x=as.factor(hour(datetime)),y=modiElec))+
-  geom_boxplot()+
+  geom_boxplot(width=0.5)+
   stat_summary(fun.y = "mean",geom = "point",size=2)+stat_summary(fun.y = "mean",geom = "line",group=1)+
-  facet_wrap(.~isBizday+modiSeason,nrow=2)+
-  theme_bw()+theme(axis.text=element_text(size=16),axis.title=element_text(size=16,face="bold"),legend.text = element_text(size=14))#+ylim(0,150)
+  #facet_wrap(.~modiSeason,nrow=2)+
+  theme_bw()+theme(axis.text=element_text(size=18),axis.title=element_text(size=18,face="bold"),legend.text = element_text(size=16))+ylim(0,600)
+
+stat.hznu.area.hourlyEnergy<-data.hznu.area.predict.use[modiSeason%in%c("Summer","Summer_warm"),#date %in% c(paperTime$Summer,paperTime$Summer_warm),#& isBizday==TRUE,#,paperTime$Summer
+                                                  c("datetime","modiSeason","isBizday","modiElec")]%>% 
+  .[complete.cases(.)]%>%melt(.,id.var=c("datetime","modiSeason","isBizday","modiElec"))%>%
+  aggregate(data=.,modiElec~modiSeason+as.factor(date(datetime)),range)#,stdModiElec
+
+aggregate(data=stat.hznu.area.hourlyEnergy,modiElec~modiSeason,mean)
+names(stat.hznu.area.hourlyEnergy)<-c("modiSeason","variable","hour","rlatErr")
+ggplot(data=stat.hznu.area.predict.hourlyErr,aes(x=hour,y=rlatErr,color=variable,shape=variable,group=variable))+geom_point()+geom_line()+facet_wrap(.~modiSeason,nrow=2)
+
+
 
