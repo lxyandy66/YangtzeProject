@@ -41,8 +41,15 @@ library(tseries)
 library(multiROC)
 library(rjson)
 set.seed(711)
+library(TTR)
+library(dtw)
+library(dtwclust)
 
 ####预处理部分####
+
+
+####获取众数####
+#注意！getMode有相同出现次数时可能返回多个数值
 getMode <- function(x,na.rm=FALSE) {
   if(na.rm==TRUE){
     x<-x[!is.na(x)]
@@ -57,6 +64,12 @@ getMode <- function(x,na.rm=FALSE) {
   ux[tab == max(tab)]
 }
 
+####计算移动平均值####
+# n 采样的点数
+# onlyPast 是否仅选用过去的值
+getMovingAverageValue <- function(x,n=3,onlyPast=TRUE){
+  stats::filter(x,rep(1/n,n), sides=ifelse(onlyPast,1,2))
+}
 
 getSeason<-function(month){
   #由月份获取季节
@@ -110,14 +123,10 @@ getMonthPeriod<-function(day){
 
 ####聚类相关####
 ##  拐点法求最佳聚类数
-wssClusterEvaluate <- function(data,
-                               maxIter = 1000,
-                               maxK = 20) {
-  wss <-
-    (nrow(data) - 1) * sum(apply(data, 2, var))
+wssClusterEvaluate <- function(data,maxIter = 1000,maxK = 20) {
+  wss <-    (nrow(data) - 1) * sum(apply(data, 2, var))
   for (i in 1:maxK){
-    wss[i] <-
-      sum(kmeans(data, centers = i, iter.max = maxIter)$withinss)
+    wss[i] <-sum(kmeans(data, centers = i, iter.max = maxIter)$withinss)
     cat(i,"  clusters  ",wss[i],"\n")
   }
   plot(1:maxK,
@@ -133,13 +142,14 @@ pamkClusterEvaluate <-
   function(data,
            startK = 2,
            endK = 10,
-           criter = "ch") {
+           criter = "ch",withPam=FALSE,isDistance=TRUE) {
     pamk.best <-
       pamk(
         data,
-        usepam = FALSE,
+        usepam = withPam,
         critout = TRUE,
         criterion = criter,
+        diss = isDistance,
         krange = min(startK, endK):max(startK, endK)
       )
     return(pamk.best)
@@ -240,7 +250,15 @@ getMaxPredictError<-function(yPred,yLook){
 }
 
 ####获取分割字符串后各成员####
-getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE){
+getSplitMember<-function(x,splitSimbol,index=1,isLastOne=FALSE,singleUse=TRUE){
+  if(!singleUse){
+    nn<-listToDataTable(strsplit(x,split = splitSimbol))
+    if(!isLastOne){
+      return(nn[,index])
+    }else{
+      return(nn[,length(nn)])
+    }
+  }
   nn<-unlist(strsplit(x,split = splitSimbol))
   if(!isLastOne){
     return(nn[index])
