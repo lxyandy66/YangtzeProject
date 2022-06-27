@@ -476,6 +476,17 @@ nrow(stat.hznu.area.completeCheck[isUseComplete==TRUE]) #812
 nrow(stat.hznu.area.completeCheck[isEnergyComplete==TRUE]) #579
 nrow(stat.hznu.area.completeCheck[isEnergyComplete&isEnergyComplete]) #579
 
+####根据审稿意见加入统计设定温度####
+# data.hznu.teaching.all 
+# 文件名"HZNU_含追加_仅教学_房间级_能耗热环境已清洗_合并_长数据.rdata" 为清洗后房间级的长数据
+data.hznu.teaching.all[modiSeason=="Summer" &finalState=="cooling"&substr(date,1,4)=="2017"]%>%{#date %in% paperTime[["Summer_warm"]]
+  ggplot(data=.,aes(x=as.factor(hour(time)),y=set_temp))+geom_boxplot()+stat_summary(fun.y="mean",geom="line",group=1)
+}
+data.hznu.teaching.all[finalState=="cooling"&substr(date,1,4)=="2017"][,.(
+  season=modiSeason[1],hour=hour(time)[1],mSettemp=mean(set_temp,na.rm=TRUE)),by=(labelSeasonHour=paste(modiSeason,hour(time),sep="_"))]
+
+
+
 
 
 ggplot(data=(data.hznu.area.predict.raw%>% mutate(.,isWeekday=isWeekday(datetime),year=as.factor(year(datetime)),

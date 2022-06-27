@@ -44,6 +44,7 @@ set.seed(711)
 library(TTR)
 library(dtw)
 library(dtwclust)
+library(bigmemory)
 
 ####预处理部分####
 
@@ -575,13 +576,21 @@ listToDataTable<-function(list){
   return(dt)
 }
 
-####将数据框类型为列表的列根据变量名取出数据####
+####将数据框中 类型为列表的列根据变量名取出数据####
 # 例如：list=data$dataList，dataList为list，list中有key1，key2
 # 根据key取出dataList列中的数据并填补缺失值
 extractFromList<-function(list,key,na.filler=NA){
   return(sapply(list, simplify = TRUE,FUN = function(x){
     return(ifelse(key%in%names(x),unlist(x[[key]]),na.filler))
   }))
+}
+
+####将json数据转化为list，若有错误返回NA####
+#还是try-catch好
+jsonToListProcessor<-function(x){
+  tryCatch({
+    return(fromJSON(x))
+  },error=function(x){return(NA)})
 }
 
 
